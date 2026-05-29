@@ -45,8 +45,9 @@ export default function AdminMap({ orders }) {
         
         if (coords) {
           // Add a tiny microscopic random offset so if 3 orders are from the exact same city, the pins don't stack invisibly on top of each other!
-          const offsetLat = (Math.random() - 0.5) * 0.005;
-          const offsetLng = (Math.random() - 0.5) * 0.005;
+          // 0.0002 is roughly 20 meters.
+          const offsetLat = (Math.random() - 0.5) * 0.0004;
+          const offsetLng = (Math.random() - 0.5) * 0.0004;
           
           newMarkers.push({
             id: order.id,
