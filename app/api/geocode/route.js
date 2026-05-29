@@ -9,11 +9,11 @@ export async function GET(request) {
   }
 
   try {
-    const url = `https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(q)}&limit=1&email=jafar.01.salama@gmail.com`;
+    // Photon by Komoot (Built on Nominatim but with fuzzy ElasticSearch for typos)
+    const url = `https://photon.komoot.io/api/?q=${encodeURIComponent(q)}&limit=1`;
     
     const response = await fetch(url, {
       headers: {
-        'User-Agent': 'JilbabStoreApp/1.0 (jafar.01.salama@gmail.com)',
         'Accept-Language': 'ar,he,en-US,en;q=0.5'
       }
     });
@@ -23,7 +23,17 @@ export async function GET(request) {
     }
 
     const data = await response.json();
-    return NextResponse.json(data);
+    
+    // Convert GeoJSON from Photon into the {lat, lon} format our frontend expects
+    let formattedData = [];
+    if (data.features && data.features.length > 0) {
+      formattedData = [{
+        lat: data.features[0].geometry.coordinates[1],
+        lon: data.features[0].geometry.coordinates[0]
+      }];
+    }
+    
+    return NextResponse.json(formattedData);
   } catch (error) {
     console.error("Server-side geocoding error:", error);
     return NextResponse.json({ error: 'Failed to fetch coordinates' }, { status: 500 });
