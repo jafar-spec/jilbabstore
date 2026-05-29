@@ -94,6 +94,9 @@ export default function AdminMap({ orders }) {
           <div style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '0.85rem' }}>
             <span style={{ display: 'inline-block', width: '12px', height: '12px', background: '#e74c3c', borderRadius: '50%' }}></span> قيد المعالجة
             <span style={{ display: 'inline-block', width: '12px', height: '12px', background: '#3498db', borderRadius: '50%', marginLeft: '10px' }}></span> جاري التوصيل
+            <span style={{ marginLeft: '15px', color: 'var(--text-secondary)' }}>
+              (الطلبات النشطة: {orders?.filter(o => ['قيد المعالجة', 'قيد المعالجة (مدفوع)', 'جاري التوصيل'].includes(o.status)).length || 0} | الدبابيس: {markers.length})
+            </span>
           </div>
         </div>
       </div>
