@@ -110,10 +110,12 @@ export default function Checkout() {
     if (promo) {
       setAppliedPromo(promo);
       let discount = 0;
+      const cTotal = Number(cartTotal);
+      const pVal = Number(promo.value);
       if (promo.type === 'percentage') {
-        discount = cartTotal * (promo.value / 100);
+        discount = cTotal * (pVal / 100);
       } else if (promo.type === 'fixed') {
-        discount = promo.value;
+        discount = pVal;
       }
       setDiscountAmount(discount);
       showToast(t('promoApplied'), 'success');
@@ -124,7 +126,7 @@ export default function Checkout() {
     }
   };
 
-  const finalTotal = Math.max(0, cartTotal - discountAmount);
+  const finalTotal = Math.max(0, Number(cartTotal) - Number(discountAmount));
 
   const handlePayment = async (e) => {
     e.preventDefault();

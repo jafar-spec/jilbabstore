@@ -45,11 +45,12 @@ export default function Navbar() {
         background: 'var(--accent-color)',
         color: '#fff',
         textAlign: 'center',
-        padding: '6px 0',
+        padding: '8px 10px',
         fontSize: '0.75rem',
         letterSpacing: '0.15em',
         textTransform: 'uppercase',
-        fontWeight: '300'
+        fontWeight: '300',
+        lineHeight: '1.4'
       }}>
         {t('announcement')}
       </div>

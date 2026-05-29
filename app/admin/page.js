@@ -10,7 +10,7 @@ import { amiriBase64 } from '@/lib/fonts/amiriBase64';
 import emailjs from '@emailjs/browser';
 import { useToast } from '@/context/ToastContext';
 import { 
-  getAllOrders, getProducts, createProduct, updateProduct, deleteProductDoc, updateOrderDoc,
+  getAllOrders, getProducts, createProduct, updateProduct, deleteProductDoc, updateOrderDoc, deleteOrderDoc,
   getSections, createSection, deleteSectionDoc, getNewsletterSubscribers,
   getStoreSettings, updateStoreSettings,
   getAllPromoCodes, addPromoCode, deletePromoCode
@@ -192,6 +192,30 @@ export default function AdminDashboard() {
       } catch(err) {
         showToast('فشل الحذف', 'error');
       }
+    }
+  };
+
+  const handleDeleteOrder = async (id) => {
+    if (window.confirm('⚠️ تحذير: هل أنت متأكد من حذف هذا الطلب نهائياً؟ هذا الإجراء لا يمكن التراجع عنه.')) {
+      try {
+        await deleteOrderDoc(id);
+        setOrders(orders.filter(o => o.id !== id));
+        setSelectedOrder(null);
+        showToast('تم حذف الطلب بنجاح', 'success');
+      } catch(err) {
+        showToast('فشل حذف الطلب', 'error');
+      }
+    }
+  };
+
+  const handleUpdateTracking = async (id, trackingId) => {
+    try {
+      await updateOrderDoc(id, { trackingId });
+      setOrders(orders.map(o => o.id === id ? { ...o, trackingId } : o));
+      setSelectedOrder(prev => ({ ...prev, trackingId }));
+      showToast('تم تحديث رقم التتبع', 'success');
+    } catch(err) {
+      showToast('فشل تحديث رقم التتبع', 'error');
     }
   };
 
@@ -667,11 +691,14 @@ export default function AdminDashboard() {
               <button onClick={() => setActiveTab('orders')} style={navButtonStyle(activeTab === 'orders')}>
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', width: '100%' }}>
                   <span><i className="fa-solid fa-shopping-bag" style={{ marginLeft: '10px' }}></i> إدارة الطلبات</span>
-                  {orders.filter(o => o.status === 'قيد المعالجة' || o.status === 'قيد المعالجة (مدفوع)').length > 0 && (
-                    <span style={{ background: '#e74c3c', color: 'white', padding: '2px 8px', borderRadius: '12px', fontSize: '0.8rem', fontWeight: 'bold' }}>
-                      {orders.filter(o => o.status === 'قيد المعالجة' || o.status === 'قيد المعالجة (مدفوع)').length}
-                    </span>
-                  )}
+                  <div style={{ position: 'relative' }}>
+                    <i className="fa-solid fa-bell" style={{ fontSize: '1.2rem', color: orders.filter(o => o.status === 'قيد المعالجة' || o.status === 'قيد المعالجة (مدفوع)').length > 0 ? '#e74c3c' : 'var(--text-secondary)', transition: '0.3s' }}></i>
+                    {orders.filter(o => o.status === 'قيد المعالجة' || o.status === 'قيد المعالجة (مدفوع)').length > 0 && (
+                      <span style={{ position: 'absolute', top: '-8px', right: '-8px', background: '#e74c3c', color: 'white', padding: '2px 6px', borderRadius: '50%', fontSize: '0.7rem', fontWeight: 'bold', border: '2px solid var(--surface-color)' }}>
+                        {orders.filter(o => o.status === 'قيد المعالجة' || o.status === 'قيد المعالجة (مدفوع)').length}
+                      </span>
+                    )}
+                  </div>
                 </div>
               </button>
               <button onClick={() => setActiveTab('inventory')} style={navButtonStyle(activeTab === 'inventory')}>
@@ -1735,6 +1762,34 @@ export default function AdminDashboard() {
                   <span className="total-amount">₪{selectedOrder.total?.toFixed(2)}</span>
                 </div>
               </div>
+
+              <div className="modal-section" style={{ marginTop: '2rem', borderTop: '1px solid var(--border-color)', paddingTop: '1.5rem' }}>
+                <h3 style={{ color: 'var(--text-primary)' }}><i className="fa-solid fa-truck-fast"></i> التتبع والإدارة (Full Control)</h3>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem', marginTop: '1rem' }}>
+                  <div style={{ display: 'flex', gap: '10px', flexWrap: 'wrap' }}>
+                    <input 
+                      type="text" 
+                      placeholder="أدخل رقم التتبع (Tracking ID)" 
+                      defaultValue={selectedOrder.trackingId || ''}
+                      id="trackingInputModal"
+                      style={{ padding: '0.8rem', borderRadius: '8px', border: '1px solid var(--border-color)', flex: 1, minWidth: '200px' }}
+                    />
+                    <button 
+                      onClick={() => handleUpdateTracking(selectedOrder.id, document.getElementById('trackingInputModal').value)}
+                      style={{ padding: '0 1.5rem', background: 'var(--accent-color)', color: '#fff', border: 'none', borderRadius: '8px', cursor: 'pointer', fontWeight: 'bold' }}
+                    >
+                      حفظ التتبع
+                    </button>
+                  </div>
+                  <button 
+                    onClick={() => handleDeleteOrder(selectedOrder.id)}
+                    style={{ padding: '1rem', background: '#e74c3c', color: '#fff', border: 'none', borderRadius: '8px', cursor: 'pointer', fontWeight: 'bold', display: 'flex', justifyContent: 'center', alignItems: 'center', gap: '8px', marginTop: '1rem' }}
+                  >
+                    <i className="fa-solid fa-trash-can"></i> حذف هذا الطلب نهائياً
+                  </button>
+                </div>
+              </div>
+
             </div>
           </div>
         </div>
