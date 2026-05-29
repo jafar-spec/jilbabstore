@@ -109,13 +109,13 @@ export default function Navbar() {
           </div>
 
           <div style={{ display: 'flex', gap: '1rem', alignItems: 'center' }}>
-            <Link href="/track" style={{ fontSize: '1.2rem', color: 'var(--text-primary)', textDecoration: 'none' }} title={t('trackOrder')}>
+            <Link href="/track" className="hide-mobile" style={{ fontSize: '1.2rem', color: 'var(--text-primary)', textDecoration: 'none' }} title={t('trackOrder')}>
               <i className="fa-solid fa-truck-fast"></i>
             </Link>
-            <Link href="/wishlist" style={{ fontSize: '1.2rem', color: 'var(--text-primary)', textDecoration: 'none' }} title={t('wishlist')}>
+            <Link href="/wishlist" className="hide-mobile" style={{ fontSize: '1.2rem', color: 'var(--text-primary)', textDecoration: 'none' }} title={t('wishlist')}>
               <i className="fa-regular fa-heart"></i>
             </Link>
-            <Link href="/profile" style={{ fontSize: '1.2rem', color: 'var(--text-primary)', textDecoration: 'none' }} title={t('profile')}>
+            <Link href="/profile" className="hide-mobile" style={{ fontSize: '1.2rem', color: 'var(--text-primary)', textDecoration: 'none' }} title={t('profile')}>
               <i className="fa-solid fa-user"></i>
             </Link>
             <button className="cart-icon" onClick={toggleCart} aria-label="Cart" style={{ fontWeight: 300, background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-primary)' }}>

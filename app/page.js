@@ -56,7 +56,7 @@ export default function Home() {
                 const sectionTitle = t(secTitleKey) !== secTitleKey ? t(secTitleKey) : (lang === 'en' ? section.title_en : section.title_ar);
                 
                 return (
-                  <div key={section.id}>
+                  <div key={section.id} id={index === 0 ? 'shop' : undefined}>
                     <div id={`section-${section.id}`}>
                       <ProductGrid 
                         title={sectionTitle} 
