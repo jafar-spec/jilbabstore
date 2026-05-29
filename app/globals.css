@@ -1018,6 +1018,13 @@ button {
   .nav-links, .hide-mobile {
     display: none !important;
   }
+  .store-name {
+    font-size: 0.85rem !important;
+  }
+  .logo-img {
+    width: 30px !important;
+    height: 30px !important;
+  }
   .navbar-actions {
     gap: 0.8rem !important;
   }

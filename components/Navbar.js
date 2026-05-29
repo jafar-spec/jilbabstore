@@ -64,9 +64,9 @@ export default function Navbar() {
           >
             <i className="fa-solid fa-bars"></i>
           </button>
-          <Link href="/" style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-            <Image src={storeSettings?.logoUrl || "/assets/logo.png"} alt="Logo" width={35} height={35} style={{ objectFit: 'contain', mixBlendMode: 'multiply' }} />
-            <span>{storeSettings ? storeSettings.storeName.toUpperCase() : t('storeName').toUpperCase()}</span>
+          <Link href="/" style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+            <Image src={storeSettings?.logoUrl || "/assets/logo.png"} alt="Logo" width={35} height={35} className="logo-img" style={{ objectFit: 'contain', mixBlendMode: 'multiply' }} />
+            <span className="store-name" style={{ whiteSpace: 'nowrap' }}>{storeSettings ? storeSettings.storeName.toUpperCase() : t('storeName').toUpperCase()}</span>
           </Link>
         </div>
 
