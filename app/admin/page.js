@@ -665,7 +665,14 @@ export default function AdminDashboard() {
                 <i className="fa-solid fa-chart-line" style={{ marginLeft: '10px' }}></i> لوحة التحكم
               </button>
               <button onClick={() => setActiveTab('orders')} style={navButtonStyle(activeTab === 'orders')}>
-                <i className="fa-solid fa-shopping-bag" style={{ marginLeft: '10px' }}></i> إدارة الطلبات
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', width: '100%' }}>
+                  <span><i className="fa-solid fa-shopping-bag" style={{ marginLeft: '10px' }}></i> إدارة الطلبات</span>
+                  {orders.filter(o => o.status === 'قيد المعالجة' || o.status === 'قيد المعالجة (مدفوع)').length > 0 && (
+                    <span style={{ background: '#e74c3c', color: 'white', padding: '2px 8px', borderRadius: '12px', fontSize: '0.8rem', fontWeight: 'bold' }}>
+                      {orders.filter(o => o.status === 'قيد المعالجة' || o.status === 'قيد المعالجة (مدفوع)').length}
+                    </span>
+                  )}
+                </div>
               </button>
               <button onClick={() => setActiveTab('inventory')} style={navButtonStyle(activeTab === 'inventory')}>
                 <i className="fa-solid fa-boxes-stacked" style={{ marginLeft: '10px' }}></i> إدارة المخزون

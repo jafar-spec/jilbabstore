@@ -123,8 +123,18 @@ export default function TrackOrder() {
 
           <div style={{ background: 'var(--bg-color)', padding: '1.5rem', borderRadius: '8px' }}>
             <h3 style={{ marginBottom: '1rem', borderBottom: '1px solid var(--border-color)', paddingBottom: '0.5rem' }}>{t('customerDetails')}</h3>
-            <p><strong>{t('nameLabel')}</strong> {order.shipping?.fullName || order.customerInfo?.fullName}</p>
-            <p><strong>{t('addressLabel')}</strong> {order.shipping?.city || order.customerInfo?.city}, {order.shipping?.neighborhood || order.customerInfo?.neighborhood}, {order.shipping?.street || order.customerInfo?.street}</p>
+            <p><strong>{t('nameLabel') || 'الاسم:'}</strong> {order.customerInfo?.fullName || order.shipping?.fullName}</p>
+            <p><strong>{t('addressLabel') || 'العنوان:'}</strong> {order.customerInfo?.city || order.shipping?.city}, {order.customerInfo?.address || order.shipping?.street}</p>
+            
+            {order.trackingId && (
+              <div style={{ marginTop: '1.5rem', padding: '1rem', background: '#e8f4f8', borderRadius: '8px', border: '1px solid #bce2f0', display: 'flex', alignItems: 'center', gap: '10px' }}>
+                <i className="fa-solid fa-barcode" style={{ fontSize: '1.5rem', color: '#0288d1' }}></i>
+                <div>
+                  <div style={{ fontSize: '0.9rem', color: '#0288d1' }}>رقم التتبع (Tracking ID)</div>
+                  <div style={{ fontWeight: 'bold', fontSize: '1.2rem', letterSpacing: '1px', color: '#01579b' }}>{order.trackingId}</div>
+                </div>
+              </div>
+            )}
           </div>
           
         </div>

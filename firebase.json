@@ -11,10 +11,5 @@
         "*.local"
       ]
     }
-  ],
-  "apphosting": [
-    {
-      "backendId": "jilbabstore-web"
-    }
   ]
 }

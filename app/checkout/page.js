@@ -378,24 +378,29 @@ export default function Checkout() {
             </div>
             
             {/* Promo Code Input */}
-            <div style={{ marginTop: '1.5rem', display: 'flex', gap: '10px' }}>
-              <input 
-                type="text" 
-                placeholder={t('promoCode')} 
-                value={promoCodeInput}
-                onChange={e => setPromoCodeInput(e.target.value)}
-                style={{ ...inputStyle, flex: 1 }}
-                disabled={appliedPromo !== null}
-              />
-              {appliedPromo ? (
-                <button type="button" onClick={() => { setAppliedPromo(null); setDiscountAmount(0); setPromoCodeInput(''); }} style={{ padding: '0 1rem', background: '#dc3545', color: 'white', border: 'none', borderRadius: '8px', cursor: 'pointer' }}>
-                  {t('remove')}
-                </button>
-              ) : (
-                <button type="button" onClick={handleApplyPromo} disabled={isProcessing} className="btn-primary" style={{ padding: '0 1rem', borderRadius: '8px' }}>
-                  {t('apply')}
-                </button>
-              )}
+            <div style={{ marginTop: '2rem', padding: '1.5rem', background: 'rgba(255, 235, 59, 0.1)', borderRadius: '12px', border: '1px dashed #fbc02d' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '10px', color: '#f57f17', fontWeight: 'bold' }}>
+                <i className="fa-solid fa-ticket"></i> {t('promoCode') || 'هل لديك كود خصم؟'}
+              </div>
+              <div style={{ display: 'flex', gap: '10px' }}>
+                <input 
+                  type="text" 
+                  placeholder={t('promoCode') || 'أدخل الكود هنا'} 
+                  value={promoCodeInput}
+                  onChange={e => setPromoCodeInput(e.target.value)}
+                  style={{ ...inputStyle, flex: 1, border: '1px solid #fbc02d', background: '#fff' }}
+                  disabled={appliedPromo !== null}
+                />
+                {appliedPromo ? (
+                  <button type="button" onClick={() => { setAppliedPromo(null); setDiscountAmount(0); setPromoCodeInput(''); }} style={{ padding: '0 1.5rem', background: '#dc3545', color: 'white', border: 'none', borderRadius: '8px', cursor: 'pointer', fontWeight: 'bold' }}>
+                    {t('remove') || 'إلغاء'}
+                  </button>
+                ) : (
+                  <button type="button" onClick={handleApplyPromo} disabled={isProcessing || !promoCodeInput.trim()} style={{ padding: '0 1.5rem', background: promoCodeInput.trim() ? '#28a745' : '#ccc', color: '#fff', border: 'none', borderRadius: '8px', cursor: promoCodeInput.trim() ? 'pointer' : 'not-allowed', fontWeight: 'bold', transition: '0.2s' }}>
+                    {t('apply') || 'تطبيق'}
+                  </button>
+                )}
+              </div>
             </div>
 
             <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '1.2rem', fontWeight: 'bold', borderTop: '1px solid var(--border-color)', paddingTop: '1.5rem', marginTop: '1.5rem', flexDirection: 'column', gap: '0.5rem' }}>

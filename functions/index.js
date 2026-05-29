@@ -13,7 +13,7 @@ exports.sendOrderReceiptGen2 = onDocumentCreated('orders/{orderId}', async (even
   const orderData = snap.data();
   const orderId = event.params.orderId;
 
-  const emailParams = {
+  const emailParamsCustomer = {
     service_id: 'service_5juk9zr',
     template_id: 'template_z4cjhn7',
     user_id: 'DE0aqc893NCUM2_kY', // EmailJS Public Key
@@ -25,19 +25,44 @@ exports.sendOrderReceiptGen2 = onDocumentCreated('orders/{orderId}', async (even
     }
   };
 
+  const emailParamsAdmin = {
+    service_id: 'service_5juk9zr',
+    template_id: 'template_z4cjhn7', // Using the same template to send a copy to the admin
+    user_id: 'DE0aqc893NCUM2_kY', 
+    template_params: {
+      to_email: 'jafar.01.salama@gmail.com',
+      to_name: 'Admin (New Order)',
+      order_id: orderId,
+      total_amount: orderData.total
+    }
+  };
+
   try {
-    const response = await fetch('https://api.emailjs.com/api/v1.0/email/send', {
+    // Send to customer
+    const responseCustomer = await fetch('https://api.emailjs.com/api/v1.0/email/send', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(emailParams)
+      body: JSON.stringify(emailParamsCustomer)
     });
 
-    if (!response.ok) {
-      const errorText = await response.text();
-      throw new Error(`EmailJS Error: ${errorText}`);
+    if (!responseCustomer.ok) {
+      const errorText = await responseCustomer.text();
+      throw new Error(`EmailJS Customer Error: ${errorText}`);
     }
 
-    console.log(`Successfully sent email receipt for order ${orderId}`);
+    // Send to admin
+    const responseAdmin = await fetch('https://api.emailjs.com/api/v1.0/email/send', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(emailParamsAdmin)
+    });
+
+    if (!responseAdmin.ok) {
+      const errorText = await responseAdmin.text();
+      throw new Error(`EmailJS Admin Error: ${errorText}`);
+    }
+
+    console.log(`Successfully sent email receipts for order ${orderId}`);
   } catch (error) {
     console.error(`Failed to send email receipt for order ${orderId}:`, error);
   }
