@@ -35,14 +35,22 @@ export default function AdminMap({ orders }) {
         const addrObj = order.shipping || order.customerInfo;
         if (!addrObj) continue;
         
-        // Build address string (City, Neighborhood, Street)
         const parts = [addrObj.city, addrObj.neighborhood, addrObj.street].filter(Boolean);
         if (parts.length === 0) continue;
         
-        // Append context to help Nominatim find locations in the region
-        const addressString = parts.join(', ') + ', Israel'; 
+        // Try full address
+        const fullAddress = parts.join(', ') + ', Israel';
+        let coords = await geocodeAddress(fullAddress);
         
-        const coords = await geocodeAddress(addressString);
+        // Fallback 1: Just City + Israel
+        if (!coords && addrObj.city) {
+          coords = await geocodeAddress(addrObj.city + ', Israel');
+        }
+        
+        // Fallback 2: Just the City name (Nominatim might map some towns without the Israel suffix)
+        if (!coords && addrObj.city) {
+          coords = await geocodeAddress(addrObj.city);
+        }
         if (coords) {
           newMarkers.push({
             id: order.id,
