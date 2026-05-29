@@ -12,6 +12,11 @@ export const metadata = {
   metadataBase: new URL('https://jilbabstore.com'),
   title: 'متجر جلباب | Jilbab Store',
   description: 'אופנה צנועה יוקרתית | Premium Modest Fashion',
+  icons: {
+    icon: '/assets/logo.png',
+    shortcut: '/assets/logo.png',
+    apple: '/assets/logo.png',
+  },
 }
 
 export default function RootLayout({ children }) {

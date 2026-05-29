@@ -142,10 +142,10 @@ export default function Checkout() {
         date: new Date().toISOString(),
         customerInfo: { ...formData, email: user ? user.email : formData.email || '' },
         items: cart,
-        subtotal: cartTotal,
-        discount: discountAmount,
+        subtotal: Number(cartTotal) || 0,
+        discount: Number(discountAmount) || 0,
         promoCode: appliedPromo ? appliedPromo.code : null,
-        total: finalTotal,
+        total: Number(finalTotal) || 0,
         status: 'قيد المعالجة (مدفوع)'
       };
       
