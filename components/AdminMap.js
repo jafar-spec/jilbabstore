@@ -38,13 +38,10 @@ export default function AdminMap({ orders }) {
         const parts = [addrObj.city, addrObj.neighborhood, addrObj.street].filter(Boolean);
         if (parts.length === 0) continue;
         
-        // 1. Try the full exact address exactly as typed
-        let coords = await geocodeAddress(parts.join(', '));
+        // strictly use ONLY the City name. Fuzzy matching on streets causes it to plot in the wrong city if the street isn't found.
+        if (!addrObj.city) continue;
         
-        // 2. If it fails, fallback strictly to the City Name
-        if (!coords && addrObj.city) {
-          coords = await geocodeAddress(addrObj.city);
-        }
+        let coords = await geocodeAddress(addrObj.city);
         
         if (coords) {
           // Add a tiny microscopic random offset so if 3 orders are from the exact same city, the pins don't stack invisibly on top of each other!
