@@ -12,7 +12,9 @@ export async function GET(request) {
     // Photon by Komoot (Built on Nominatim but with fuzzy ElasticSearch for typos)
     // Bounding Box limits search strictly to Israel/Palestine (minLon,minLat,maxLon,maxLat)
     const bbox = '34.0,29.4,35.9,33.4';
-    const url = `https://photon.komoot.io/api/?q=${encodeURIComponent(q)}&bbox=${bbox}&limit=1`;
+    // Force the search engine to ONLY return actual cities, towns, and villages, completely ignoring identically named streets
+    const tags = '&osm_tag=place:city&osm_tag=place:town&osm_tag=place:village';
+    const url = `https://photon.komoot.io/api/?q=${encodeURIComponent(q)}&bbox=${bbox}${tags}&limit=1`;
     
     const response = await fetch(url, {
       headers: {
