@@ -16,10 +16,13 @@
     "html2canvas": "^1.4.1",
     "jspdf": "^4.2.1",
     "jspdf-autotable": "^5.0.8",
+    "leaflet": "^1.9.4",
+    "leaflet-defaulticon-compatibility": "^0.1.2",
     "next": "16.2.6",
     "react": "19.2.4",
     "react-barcode": "^1.6.1",
     "react-dom": "19.2.4",
+    "react-leaflet": "^5.0.0",
     "xml2js": "^0.6.2"
   },
   "devDependencies": {

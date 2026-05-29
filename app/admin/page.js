@@ -15,6 +15,7 @@ import {
   getStoreSettings, updateStoreSettings,
   getAllPromoCodes, addPromoCode, deletePromoCode
 } from '@/lib/db';
+import AdminMap from '@/components/AdminMap';
 
 // Helper function to compress images before saving as Base64 to avoid huge payloads
 const compressImage = (file, maxWidth = 800, maxHeight = 800) => {
@@ -709,6 +710,10 @@ export default function AdminDashboard() {
               </button>
               <button onClick={() => setActiveTab('sections')} style={navButtonStyle(activeTab === 'sections')}>
                 <i className="fa-solid fa-list" style={{ marginLeft: '10px' }}></i> أقسام المتجر (Sections)
+              </button>
+
+              <button onClick={() => setActiveTab('map')} style={navButtonStyle(activeTab === 'map')}>
+                <i className="fa-solid fa-map-location-dot" style={{ marginLeft: '10px' }}></i> خريطة التوزيع
               </button>
               <button onClick={() => setActiveTab('newsletter')} style={navButtonStyle(activeTab === 'newsletter')}>
                 <i className="fa-solid fa-envelope" style={{ marginLeft: '10px' }}></i> النشرة البريدية
@@ -1715,6 +1720,11 @@ export default function AdminDashboard() {
                   </div>
                 </div>
               </div>
+            )}
+
+            {/* MAP TAB */}
+            {activeTab === 'map' && role === 'operator' && (
+              <AdminMap orders={orders} />
             )}
 
           </div>
