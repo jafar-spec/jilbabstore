@@ -4,6 +4,7 @@ import Hero from '@/components/Hero';
 import ProductGrid from '@/components/ProductGrid';
 import CartSidebar from '@/components/CartSidebar';
 import Footer from '@/components/Footer';
+import AdsBanner from '@/components/AdsBanner';
 import { useEffect, useState } from 'react';
 import { useLanguage } from '@/context/LanguageContext';
 import { getProducts, getSections } from '@/lib/db';
@@ -38,6 +39,9 @@ export default function Home() {
   return (
     <main>
       <Hero />
+
+      {/* Promotional Ads Banner — admin-controlled */}
+      <AdsBanner />
       
       {loading ? (
           <div style={{ textAlign: 'center', padding: '4rem 0', fontFamily: 'var(--font-serif)', color: 'var(--text-secondary)' }}>
@@ -61,6 +65,7 @@ export default function Home() {
                       <ProductGrid 
                         title={sectionTitle} 
                         products={sectionProducts} 
+                        subsections={section.subsections || []}
                         emptyMessage={t('emptySection')} 
                       />
                     </div>

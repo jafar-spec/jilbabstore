@@ -3,6 +3,7 @@ import { usePathname } from 'next/navigation';
 import Navbar from '@/components/Navbar';
 import Footer from '@/components/Footer';
 import CartSidebar from '@/components/CartSidebar';
+import CustomerServiceWidget from '@/components/CustomerServiceWidget';
 
 export default function ClientWrapper({ children }) {
   const pathname = usePathname();
@@ -19,6 +20,7 @@ export default function ClientWrapper({ children }) {
         {children}
       </main>
       <CartSidebar />
+      <CustomerServiceWidget />
       <Footer />
     </>
   );

@@ -56,9 +56,12 @@ const generateBarcodeBase64 = (text) => {
 export default function Checkout() {
   const { cart, cartTotal, clearCart } = useCart();
   const { showToast } = useToast();
-  const { t, lang } = useLanguage();
+  const { t, lang, storeSettings } = useLanguage();
   const router = useRouter();
   const { user } = useAuth();
+  
+  const freeShippingThreshold = Number(storeSettings?.freeShippingThreshold) || 250;
+  const shippingCost = Number(storeSettings?.shippingCost) || 30;
   
   const [step, setStep] = useState(1);
   const [isClient, setIsClient] = useState(false);
@@ -126,7 +129,10 @@ export default function Checkout() {
     }
   };
 
-  const finalTotal = Math.max(0, Number(cartTotal) - Number(discountAmount));
+  const discountedSubtotal = Math.max(0, Number(cartTotal) - Number(discountAmount));
+  const isFreeShipping = discountedSubtotal >= freeShippingThreshold;
+  const shipping = isFreeShipping ? 0 : shippingCost;
+  const finalTotal = discountedSubtotal + shipping;
 
   const handlePayment = async (e) => {
     e.preventDefault();
@@ -155,6 +161,7 @@ export default function Checkout() {
         subtotal: Number(cartTotal) || 0,
         discount: Number(discountAmount) || 0,
         promoCode: appliedPromo ? appliedPromo.code : null,
+        shipping: shipping || 0,
         total: Number(finalTotal) || 0,
         status: 'قيد المعالجة (مدفوع)'
       };

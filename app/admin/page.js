@@ -13,7 +13,8 @@ import {
   getAllOrders, getProducts, createProduct, updateProduct, deleteProductDoc, updateOrderDoc, deleteOrderDoc,
   getSections, createSection, deleteSectionDoc, getNewsletterSubscribers,
   getStoreSettings, updateStoreSettings,
-  getAllPromoCodes, addPromoCode, deletePromoCode
+  getAllPromoCodes, addPromoCode, deletePromoCode,
+  getAllTickets, updateTicket, deleteTicket, updateSectionSubsections
 } from '@/lib/db';
 import AdminMap from '@/components/AdminMap';
 
@@ -84,6 +85,10 @@ export default function AdminDashboard() {
   const [promoCodes, setPromoCodes] = useState([]);
   const [newPromo, setNewPromo] = useState({ code: '', discountValue: 0, type: 'fixed' });
 
+  // SUPPORT TICKETS STATE
+  const [tickets, setTickets] = useState([]);
+  const [selectedTicket, setSelectedTicket] = useState(null);
+
   // CMS STATE
   const [cmsSettings, setCmsSettings] = useState({
     storeName: '',
@@ -135,19 +140,21 @@ export default function AdminDashboard() {
   const fetchData = async () => {
     setLoading(true);
     try {
-      const [fetchedOrders, fetchedProducts, fetchedSections, fetchedSubscribers, fetchedSettings, fetchedPromoCodes] = await Promise.all([
+      const [fetchedOrders, fetchedProducts, fetchedSections, fetchedSubscribers, fetchedSettings, fetchedPromoCodes, fetchedTickets] = await Promise.all([
         getAllOrders(),
         getProducts(),
         getSections(),
         getNewsletterSubscribers(),
         getStoreSettings(),
-        getAllPromoCodes()
+        getAllPromoCodes(),
+        getAllTickets()
       ]);
       setOrders(fetchedOrders);
       setProducts(fetchedProducts);
       setSections(fetchedSections);
       setSubscribers(fetchedSubscribers);
       setPromoCodes(fetchedPromoCodes || []);
+      setTickets(fetchedTickets || []);
       
       if (fetchedSettings) {
         setCmsSettings(fetchedSettings);
@@ -724,6 +731,10 @@ export default function AdminDashboard() {
               <button onClick={() => setActiveTab('promos')} style={navButtonStyle(activeTab === 'promos')}>
                 <i className="fa-solid fa-tags" style={{ marginLeft: '10px' }}></i> كوبونات الخصم
               </button>
+              <button onClick={() => setActiveTab('tickets')} style={navButtonStyle(activeTab === 'tickets')}>
+                <i className="fa-solid fa-headset" style={{ marginLeft: '10px' }}></i> تذاكر الدعم
+                {/* Show unread count badge if needed */}
+              </button>
               <button onClick={() => setActiveTab('customers')} style={navButtonStyle(activeTab === 'customers')}>
                 <i className="fa-solid fa-users" style={{ marginLeft: '10px' }}></i> قاعدة العملاء والمشتريات
               </button>
@@ -1059,23 +1070,76 @@ export default function AdminDashboard() {
                   </form>
                 </div>
                 <div style={{ background: 'var(--surface-color)', padding: '2rem', borderRadius: '16px', border: '1px solid var(--glass-border)' }}>
-                  <h3>الأقسام الحالية</h3>
+                  <h3>الأقسام الحالية والأقسام الفرعية</h3>
                   {sections.length === 0 ? (
                     <p style={{ color: 'var(--text-secondary)', marginTop: '1rem' }}>لا توجد أقسام بعد.</p>
                   ) : (
-                    <ul style={{ listStyle: 'none', padding: 0, marginTop: '1rem', display: 'flex', flexDirection: 'column', gap: '1rem' }}>
-                      {sections.map(sec => (
-                        <li key={sec.id} style={{ display: 'flex', justifyContent: 'space-between', padding: '1rem', border: '1px solid var(--glass-border)', borderRadius: '8px' }}>
-                          <div>
-                            <strong>{sec.title_ar} ({sec.title_en})</strong>
-                            <span style={{ display: 'block', fontSize: '0.8rem', color: 'var(--text-secondary)' }}>الترتيب: {sec.order || 0}</span>
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem', marginTop: '1rem' }}>
+                      {sections.map(sec => {
+                        const subsections = sec.subsections || [];
+                        return (
+                          <div key={sec.id} style={{ border: '1px solid var(--glass-border)', borderRadius: '12px', overflow: 'hidden' }}>
+                            <div style={{ display: 'flex', justifyContent: 'space-between', padding: '1rem 1.5rem', background: 'var(--bg-color)', alignItems: 'center' }}>
+                              <div>
+                                <strong style={{ color: 'var(--text-primary)' }}>{sec.title_ar} ({sec.title_en})</strong>
+                                <span style={{ display: 'block', fontSize: '0.8rem', color: 'var(--text-secondary)' }}>الترتيب: {sec.order || 0} · {subsections.length} قسم فرعي</span>
+                              </div>
+                              <button onClick={() => handleDeleteSection(sec.id)} style={{ background: 'transparent', border: 'none', color: '#ff4444', cursor: 'pointer' }}>
+                                <i className="fa-solid fa-trash"></i>
+                              </button>
+                            </div>
+                            {/* Sub-sections */}
+                            <div style={{ padding: '1rem 1.5rem', background: 'var(--surface-color)' }}>
+                              <div style={{ fontSize: '0.8rem', fontWeight: 700, color: 'var(--text-secondary)', marginBottom: '8px', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+                                الأقسام الفرعية (Sub-sections)
+                              </div>
+                              <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px', marginBottom: '10px' }}>
+                                {subsections.map(sub => (
+                                  <div key={sub.id} style={{ display: 'flex', alignItems: 'center', gap: '6px', padding: '4px 12px', borderRadius: '99px', background: 'var(--bg-color)', border: '1px solid var(--border-color)', fontSize: '0.85rem' }}>
+                                    <span>{sub.name_ar} / {sub.name_en}</span>
+                                    <button
+                                      onClick={async () => {
+                                        const updated = subsections.filter(s => s.id !== sub.id);
+                                        await updateSectionSubsections(sec.id, updated);
+                                        setSections(prev => prev.map(s => s.id === sec.id ? {...s, subsections: updated} : s));
+                                        showToast('تم الحذف', 'success');
+                                      }}
+                                      style={{ background: 'none', border: 'none', color: '#e74c3c', cursor: 'pointer', padding: 0, fontSize: '0.75rem', lineHeight: 1 }}
+                                    >
+                                      <i className="fa-solid fa-xmark"></i>
+                                    </button>
+                                  </div>
+                                ))}
+                              </div>
+                              {/* Add sub-section inline form */}
+                              <form onSubmit={async (e) => {
+                                e.preventDefault();
+                                const fd = new FormData(e.target);
+                                const newSub = {
+                                  id: Date.now().toString(),
+                                  name_ar: fd.get('name_ar'),
+                                  name_en: fd.get('name_en'),
+                                  name_he: fd.get('name_he') || ''
+                                };
+                                if (!newSub.name_ar && !newSub.name_en) return;
+                                const updated = [...subsections, newSub];
+                                await updateSectionSubsections(sec.id, updated);
+                                setSections(prev => prev.map(s => s.id === sec.id ? {...s, subsections: updated} : s));
+                                e.target.reset();
+                                showToast('تمت إضافة القسم الفرعي', 'success');
+                              }} style={{ display: 'flex', gap: '6px', flexWrap: 'wrap', alignItems: 'center' }}>
+                                <input name="name_ar" placeholder="الاسم عربي" required style={{ padding: '5px 10px', borderRadius: '6px', border: '1px solid var(--border-color)', background: 'var(--bg-color)', color: 'var(--text-primary)', fontSize: '0.85rem', width: '120px' }} />
+                                <input name="name_en" placeholder="English name" style={{ padding: '5px 10px', borderRadius: '6px', border: '1px solid var(--border-color)', background: 'var(--bg-color)', color: 'var(--text-primary)', fontSize: '0.85rem', width: '130px' }} />
+                                <input name="name_he" placeholder="שם עברי" style={{ padding: '5px 10px', borderRadius: '6px', border: '1px solid var(--border-color)', background: 'var(--bg-color)', color: 'var(--text-primary)', fontSize: '0.85rem', width: '120px' }} />
+                                <button type="submit" style={{ padding: '5px 14px', borderRadius: '6px', border: 'none', background: 'var(--accent-color)', color: '#fff', cursor: 'pointer', fontSize: '0.85rem', fontWeight: 700 }}>
+                                  <i className="fa-solid fa-plus"></i> إضافة
+                                </button>
+                              </form>
+                            </div>
                           </div>
-                          <button onClick={() => handleDeleteSection(sec.id)} style={{ background: 'transparent', border: 'none', color: '#ff4444', cursor: 'pointer' }}>
-                            <i className="fa-solid fa-trash"></i>
-                          </button>
-                        </li>
-                      ))}
-                    </ul>
+                        );
+                      })}
+                    </div>
                   )}
                 </div>
               </div>
@@ -1278,11 +1342,27 @@ export default function AdminDashboard() {
 
                       <div style={{ flex: '1 1 200px' }}>
                         <label className="admin-label">القسم (الواجهة الرئيسية)</label>
-                        <select value={newProduct.sectionId} onChange={e => setNewProduct({...newProduct, sectionId: e.target.value})} className="admin-input" required>
+                        <select value={newProduct.sectionId} onChange={e => setNewProduct({...newProduct, sectionId: e.target.value, subsectionId: ''})} className="admin-input" required>
                           <option value="" disabled>اختر القسم</option>
                           {sections.map(sec => <option key={sec.id} value={sec.id}>{sec.title_ar} ({sec.title_en})</option>)}
                         </select>
                       </div>
+
+                      {/* Sub-section selector — shows only when selected section has subsections */}
+                      {(() => {
+                        const selectedSec = sections.find(s => s.id === newProduct.sectionId);
+                        const subs = selectedSec?.subsections || [];
+                        if (subs.length === 0) return null;
+                        return (
+                          <div style={{ flex: '1 1 200px' }}>
+                            <label className="admin-label">القسم الفرعي (Sub-section)</label>
+                            <select value={newProduct.subsectionId || ''} onChange={e => setNewProduct({...newProduct, subsectionId: e.target.value})} className="admin-input">
+                              <option value="">-- بدون قسم فرعي --</option>
+                              {subs.map(sub => <option key={sub.id} value={sub.id}>{sub.name_ar} / {sub.name_en}</option>)}
+                            </select>
+                          </div>
+                        );
+                      })()}
 
                       <div style={{ flex: '1 1 200px' }}>
                         <label className="admin-label">تصنيف إضافي (مثال: جلباب)</label>
@@ -1464,8 +1544,137 @@ export default function AdminDashboard() {
 
                   </div>
 
+                  {/* ─── SHIPPING SETTINGS ─── */}
+                  <div style={{ borderTop: '1px solid var(--border-color)', paddingTop: '1.5rem' }}>
+                    <h4 style={{ color: 'var(--accent-color)', marginBottom: '1rem', fontSize: '1.1rem' }}>
+                      <i className="fa-solid fa-truck-fast"></i> إعدادات الشحن (Shipping Settings)
+                    </h4>
+                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '1rem' }}>
+                      <div>
+                        <label className="admin-label">حد الشحن المجاني (Free Shipping Min. ₪)</label>
+                        <input type="number" min="0" value={cmsSettings.freeShippingThreshold || 250} onChange={e => setCmsSettings({...cmsSettings, freeShippingThreshold: Number(e.target.value)})} className="admin-input" />
+                      </div>
+                      <div>
+                        <label className="admin-label">تكلفة الشحن (Shipping Cost ₪)</label>
+                        <input type="number" min="0" value={cmsSettings.shippingCost || 30} onChange={e => setCmsSettings({...cmsSettings, shippingCost: Number(e.target.value)})} className="admin-input" />
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* ─── SOCIAL MEDIA LINKS ─── */}
+                  <div style={{ borderTop: '1px solid var(--border-color)', paddingTop: '1.5rem' }}>
+                    <h4 style={{ color: 'var(--accent-color)', marginBottom: '1rem', fontSize: '1.1rem' }}>
+                      <i className="fa-solid fa-share-nodes"></i> روابط وسائل التواصل الاجتماعي
+                    </h4>
+                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(260px, 1fr))', gap: '1rem' }}>
+                      {[
+                        { key: 'instagram', label: 'Instagram', icon: 'fa-brands fa-instagram', placeholder: 'https://instagram.com/...' },
+                        { key: 'facebook', label: 'Facebook', icon: 'fa-brands fa-facebook-f', placeholder: 'https://facebook.com/...' },
+                        { key: 'tiktok', label: 'TikTok', icon: 'fa-brands fa-tiktok', placeholder: 'https://tiktok.com/@...' },
+                        { key: 'whatsapp', label: 'WhatsApp', icon: 'fa-brands fa-whatsapp', placeholder: 'https://wa.me/972...' },
+                        { key: 'snapchat', label: 'Snapchat', icon: 'fa-brands fa-snapchat', placeholder: 'https://snapchat.com/add/...' },
+                        { key: 'youtube', label: 'YouTube', icon: 'fa-brands fa-youtube', placeholder: 'https://youtube.com/@...' },
+                        { key: 'twitter', label: 'X (Twitter)', icon: 'fa-brands fa-x-twitter', placeholder: 'https://x.com/...' },
+                        { key: 'telegram', label: 'Telegram', icon: 'fa-brands fa-telegram', placeholder: 'https://t.me/...' },
+                      ].map(s => (
+                        <div key={s.key} style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                          <i className={s.icon} style={{ fontSize: '1.3rem', color: 'var(--text-secondary)', width: '22px', textAlign: 'center' }}></i>
+                          <input
+                            type="url"
+                            placeholder={s.placeholder}
+                            value={cmsSettings.socials?.[s.key] || ''}
+                            onChange={e => setCmsSettings({...cmsSettings, socials: {...(cmsSettings.socials || {}), [s.key]: e.target.value}})}
+                            className="admin-input"
+                            style={{ flex: 1 }}
+                          />
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+
+                  {/* ─── ADS BANNERS ─── */}
+                  <div style={{ borderTop: '1px solid var(--border-color)', paddingTop: '1.5rem' }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem' }}>
+                      <h4 style={{ color: 'var(--accent-color)', margin: 0, fontSize: '1.1rem' }}>
+                        <i className="fa-solid fa-rectangle-ad"></i> لافتات الإعلانات الترويجية (Ads Banners)
+                      </h4>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          const current = cmsSettings.ads || [];
+                          const newAd = { id: Date.now(), title: '', subtitle: '', badge: '', linkUrl: '', linkText: '', imageUrl: '', active: true };
+                          setCmsSettings({...cmsSettings, ads: [...current, newAd]});
+                        }}
+                        style={{ padding: '6px 14px', borderRadius: '8px', border: '1px solid var(--accent-color)', background: 'none', color: 'var(--accent-color)', cursor: 'pointer', fontWeight: 700, fontSize: '0.9rem' }}
+                      >
+                        <i className="fa-solid fa-plus"></i> إضافة إعلان
+                      </button>
+                    </div>
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
+                      {(cmsSettings.ads || []).map((ad, idx) => (
+                        <div key={ad.id || idx} style={{ border: '1px solid var(--glass-border)', borderRadius: '12px', padding: '1.5rem', position: 'relative', background: 'var(--bg-color)' }}>
+                          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem' }}>
+                            <strong style={{ color: 'var(--text-primary)' }}>إعلان #{idx + 1}</strong>
+                            <div style={{ display: 'flex', gap: '10px', alignItems: 'center' }}>
+                              <label style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '0.85rem', cursor: 'pointer' }}>
+                                <input type="checkbox" checked={ad.active} onChange={e => {
+                                  const ads = [...(cmsSettings.ads || [])];
+                                  ads[idx] = {...ad, active: e.target.checked};
+                                  setCmsSettings({...cmsSettings, ads});
+                                }} />
+                                مُفعّل
+                              </label>
+                              <button type="button" onClick={() => {
+                                const ads = (cmsSettings.ads || []).filter((_, i) => i !== idx);
+                                setCmsSettings({...cmsSettings, ads});
+                              }} style={{ padding: '4px 8px', borderRadius: '6px', border: '1px solid #e74c3c', background: 'none', color: '#e74c3c', cursor: 'pointer', fontSize: '0.85rem' }}>
+                                <i className="fa-solid fa-trash"></i>
+                              </button>
+                            </div>
+                          </div>
+                          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '1rem' }}>
+                            <div>
+                              <label className="admin-label">العنوان (Title)</label>
+                              <input value={ad.title || ''} onChange={e => { const ads=[...(cmsSettings.ads||[])]; ads[idx]={...ad,title:e.target.value}; setCmsSettings({...cmsSettings,ads}); }} className="admin-input" placeholder="عرض خاص!" />
+                            </div>
+                            <div>
+                              <label className="admin-label">شارة (Badge)</label>
+                              <input value={ad.badge || ''} onChange={e => { const ads=[...(cmsSettings.ads||[])]; ads[idx]={...ad,badge:e.target.value}; setCmsSettings({...cmsSettings,ads}); }} className="admin-input" placeholder="خصم 50%" />
+                            </div>
+                            <div style={{ gridColumn: '1 / -1' }}>
+                              <label className="admin-label">الوصف (Subtitle)</label>
+                              <input value={ad.subtitle || ''} onChange={e => { const ads=[...(cmsSettings.ads||[])]; ads[idx]={...ad,subtitle:e.target.value}; setCmsSettings({...cmsSettings,ads}); }} className="admin-input" placeholder="تسوقي الآن على جميع المنتجات" />
+                            </div>
+                            <div>
+                              <label className="admin-label">رابط الزر (Button URL)</label>
+                              <input value={ad.linkUrl || ''} onChange={e => { const ads=[...(cmsSettings.ads||[])]; ads[idx]={...ad,linkUrl:e.target.value}; setCmsSettings({...cmsSettings,ads}); }} className="admin-input" placeholder="/#shop" />
+                            </div>
+                            <div>
+                              <label className="admin-label">نص الزر (Button Text)</label>
+                              <input value={ad.linkText || ''} onChange={e => { const ads=[...(cmsSettings.ads||[])]; ads[idx]={...ad,linkText:e.target.value}; setCmsSettings({...cmsSettings,ads}); }} className="admin-input" placeholder="تسوقي الآن" />
+                            </div>
+                            <div style={{ gridColumn: '1 / -1' }}>
+                              <label className="admin-label">صورة الإعلان (Banner Image)</label>
+                              {ad.imageUrl && <img src={ad.imageUrl} alt="" style={{ width: '100%', height: '100px', objectFit: 'cover', borderRadius: '8px', marginBottom: '8px' }} />}
+                              <input type="file" accept="image/*" onChange={async (e) => {
+                                const file = e.target.files[0]; if (!file) return;
+                                const compressed = await compressImage(file);
+                                const ads=[...(cmsSettings.ads||[])]; ads[idx]={...ad,imageUrl:compressed}; setCmsSettings({...cmsSettings,ads});
+                              }} style={{ fontSize: '0.85rem' }} />
+                            </div>
+                          </div>
+                        </div>
+                      ))}
+                      {(cmsSettings.ads || []).length === 0 && (
+                        <div style={{ textAlign: 'center', padding: '2rem', color: 'var(--text-secondary)', border: '2px dashed var(--border-color)', borderRadius: '12px' }}>
+                          لا توجد إعلانات. اضغط "إضافة إعلان" لإنشاء لافتة ترويجية.
+                        </div>
+                      )}
+                    </div>
+                  </div>
+
                   <button type="submit" disabled={isSavingCms} style={{ padding: '1rem', background: 'var(--accent-color)', color: '#fff', border: 'none', borderRadius: '8px', fontSize: '1.2rem', cursor: 'pointer', marginTop: '1rem' }}>
-                    {isSavingCms ? 'جاري الحفظ...' : 'حفظ الإعدادات'}
+                    {isSavingCms ? 'جاري الحفظ...' : 'حفظ جميع الإعدادات'}
                   </button>
                 </form>
               </div>
@@ -1619,6 +1828,127 @@ export default function AdminDashboard() {
                     </tbody>
                   </table>
                 </div>
+              </div>
+            )}
+
+            {/* SUPPORT TICKETS TAB */}
+            {activeTab === 'tickets' && role === 'operator' && (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                  <h3 style={{ color: 'var(--text-primary)', margin: 0 }}>
+                    <i className="fa-solid fa-headset"></i> تذاكر دعم العملاء
+                  </h3>
+                  <span style={{ background: 'var(--accent-color)', color: '#fff', borderRadius: '99px', padding: '4px 12px', fontSize: '0.8rem', fontWeight: 700 }}>
+                    {tickets.filter(t => t.status === 'open').length} مفتوح
+                  </span>
+                </div>
+
+                {tickets.length === 0 ? (
+                  <div style={{ textAlign: 'center', padding: '4rem', color: 'var(--text-secondary)', background: 'var(--surface-color)', borderRadius: '16px', border: '1px solid var(--glass-border)' }}>
+                    <i className="fa-solid fa-ticket" style={{ fontSize: '3rem', opacity: 0.3, display: 'block', marginBottom: '1rem' }}></i>
+                    لا توجد تذاكر دعم بعد
+                  </div>
+                ) : (
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
+                    {tickets.map(ticket => (
+                      <div key={ticket.id} style={{
+                        background: 'var(--surface-color)', borderRadius: '14px', padding: '1.5rem',
+                        border: `1px solid ${ticket.status === 'open' ? 'var(--accent-color)55' : ticket.status === 'in_progress' ? '#f59e0b55' : 'var(--glass-border)'}`,
+                        cursor: 'pointer',
+                        boxShadow: selectedTicket?.id === ticket.id ? '0 0 0 2px var(--accent-color)' : 'none'
+                      }}
+                        onClick={() => setSelectedTicket(selectedTicket?.id === ticket.id ? null : ticket)}
+                      >
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: '1rem', flexWrap: 'wrap' }}>
+                          <div>
+                            <div style={{ display: 'flex', gap: '10px', alignItems: 'center', marginBottom: '6px' }}>
+                              <span style={{ fontFamily: 'monospace', fontWeight: 800, color: 'var(--accent-color)', fontSize: '1rem' }}>{ticket.token}</span>
+                              <span style={{
+                                padding: '3px 10px', borderRadius: '99px', fontSize: '0.75rem', fontWeight: 700,
+                                background: ticket.status === 'open' ? '#fef2f2' : ticket.status === 'in_progress' ? '#fffbeb' : '#f0fdf4',
+                                color: ticket.status === 'open' ? '#dc2626' : ticket.status === 'in_progress' ? '#d97706' : '#16a34a',
+                                border: `1px solid ${ticket.status === 'open' ? '#fca5a5' : ticket.status === 'in_progress' ? '#fcd34d' : '#86efac'}`
+                              }}>
+                                {ticket.status === 'open' ? '🔴 مفتوح' : ticket.status === 'in_progress' ? '🟡 جاري' : '✅ مُحلول'}
+                              </span>
+                            </div>
+                            <div style={{ fontWeight: 700, color: 'var(--text-primary)', marginBottom: '2px' }}>{ticket.name}</div>
+                            <div style={{ fontSize: '0.82rem', color: 'var(--text-secondary)' }}>
+                              {ticket.phone && <span><i className="fa-solid fa-phone"></i> {ticket.phone} · </span>}
+                              {ticket.email && <span><i className="fa-solid fa-envelope"></i> {ticket.email} · </span>}
+                              {ticket.orderNumber && <span>طلب #{ticket.orderNumber} · </span>}
+                              {ticket.subject}
+                            </div>
+                            <div style={{ fontSize: '0.8rem', color: 'var(--text-secondary)', marginTop: '4px' }}>
+                              {new Date(ticket.createdAt).toLocaleString('ar-SA')}
+                            </div>
+                          </div>
+                          <div style={{ display: 'flex', gap: '8px' }}>
+                            <select
+                              value={ticket.status}
+                              onClick={e => e.stopPropagation()}
+                              onChange={async (e) => {
+                                await updateTicket(ticket.id, { status: e.target.value });
+                                setTickets(prev => prev.map(t => t.id === ticket.id ? {...t, status: e.target.value} : t));
+                                showToast('تم تحديث الحالة', 'success');
+                              }}
+                              style={{ padding: '6px 10px', borderRadius: '8px', border: '1px solid var(--border-color)', background: 'var(--bg-color)', color: 'var(--text-primary)', fontSize: '0.85rem', cursor: 'pointer' }}
+                            >
+                              <option value="open">مفتوح</option>
+                              <option value="in_progress">جاري المعالجة</option>
+                              <option value="resolved">مُحلول</option>
+                            </select>
+                            <button
+                              onClick={async (e) => { e.stopPropagation(); if(confirm('حذف هذه التذكرة؟')) { await deleteTicket(ticket.id); setTickets(prev => prev.filter(t => t.id !== ticket.id)); showToast('تم الحذف', 'success'); } }}
+                              style={{ padding: '6px 10px', borderRadius: '8px', border: '1px solid #e74c3c', background: 'none', color: '#e74c3c', cursor: 'pointer' }}
+                            >
+                              <i className="fa-solid fa-trash"></i>
+                            </button>
+                          </div>
+                        </div>
+
+                        {/* Expanded detail view */}
+                        {selectedTicket?.id === ticket.id && (
+                          <div style={{ marginTop: '1.5rem', paddingTop: '1.5rem', borderTop: '1px solid var(--glass-border)' }}>
+                            <div style={{ background: 'var(--bg-color)', borderRadius: '10px', padding: '1rem', marginBottom: '1rem', color: 'var(--text-primary)', lineHeight: 1.7 }}>
+                              <strong>الرسالة:</strong><br/>{ticket.message}
+                            </div>
+                            {ticket.images && ticket.images.length > 0 && (
+                              <div style={{ display: 'flex', gap: '10px', flexWrap: 'wrap', marginBottom: '1rem' }}>
+                                {ticket.images.map((img, i) => (
+                                  <img key={i} src={img} alt="" style={{ width: '100px', height: '100px', objectFit: 'cover', borderRadius: '10px', border: '1px solid var(--border-color)', cursor: 'pointer' }}
+                                    onClick={() => window.open(img, '_blank')}
+                                  />
+                                ))}
+                              </div>
+                            )}
+                            <div style={{ display: 'flex', gap: '8px' }}>
+                              <textarea
+                                placeholder="ملاحظة داخلية للموظفين..."
+                                defaultValue={ticket.adminNote || ''}
+                                rows={2}
+                                style={{ flex: 1, padding: '8px', borderRadius: '8px', border: '1px solid var(--border-color)', background: 'var(--bg-color)', color: 'var(--text-primary)', fontFamily: 'inherit', resize: 'vertical' }}
+                                onChange={e => {
+                                  const val = e.target.value;
+                                  setSelectedTicket(t => ({...t, adminNote: val}));
+                                }}
+                              />
+                              <button
+                                onClick={async () => {
+                                  await updateTicket(ticket.id, { adminNote: selectedTicket.adminNote || '' });
+                                  showToast('تم حفظ الملاحظة', 'success');
+                                }}
+                                style={{ padding: '8px 16px', borderRadius: '8px', border: 'none', background: 'var(--accent-color)', color: '#fff', cursor: 'pointer', fontWeight: 700 }}
+                              >
+                                حفظ
+                              </button>
+                            </div>
+                          </div>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                )}
               </div>
             )}
 
