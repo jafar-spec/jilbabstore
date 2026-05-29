@@ -4,11 +4,15 @@ import Image from 'next/image';
 import Link from 'next/link';
 import { useLanguage } from '@/context/LanguageContext';
 
+// Helper: pick the right language field from an ad object
+const pick = (obj, field, lang) =>
+  obj?.[`${field}_${lang}`] || obj?.[`${field}_ar`] || obj?.[field] || '';
+
 export default function AdsBanner() {
-  const { storeSettings } = useLanguage();
+  const { storeSettings, lang } = useLanguage();
   const [current, setCurrent] = useState(0);
 
-  const ads = (storeSettings?.ads || []).filter(ad => ad.active && (ad.imageUrl || ad.title));
+  const ads = (storeSettings?.ads || []).filter(ad => ad.active && (ad.imageUrl || ad.title || ad[`title_${lang}`] || ad.title_ar));
 
   useEffect(() => {
     if (ads.length <= 1) return;
@@ -41,29 +45,29 @@ export default function AdsBanner() {
             <div style={{ position: 'absolute', inset: 0, background: 'linear-gradient(to right, rgba(0,0,0,0.6) 0%, rgba(0,0,0,0.1) 60%, transparent 100%)' }} />
 
             {/* Text Content */}
-            {(a.title || a.subtitle) && (
+            {(pick(a,'title',lang) || pick(a,'subtitle',lang)) && (
               <div style={{
                 position: 'absolute', left: 'clamp(1.5rem, 5%, 5rem)', top: '50%', transform: 'translateY(-50%)',
                 color: '#fff', maxWidth: '500px'
               }}>
-                {a.badge && (
+                {pick(a,'badge',lang) && (
                   <span style={{ display: 'inline-block', background: 'var(--accent-color)', color: '#fff', padding: '4px 14px', fontSize: '0.7rem', letterSpacing: '0.15em', textTransform: 'uppercase', fontWeight: 700, marginBottom: '1rem' }}>
-                    {a.badge}
+                    {pick(a,'badge',lang)}
                   </span>
                 )}
-                {a.title && (
+                {pick(a,'title',lang) && (
                   <h2 style={{ fontSize: 'clamp(1.4rem, 3.5vw, 2.8rem)', fontWeight: 700, margin: '0 0 0.5rem', lineHeight: 1.2, textTransform: 'uppercase', letterSpacing: '0.03em' }}>
-                    {a.title}
+                    {pick(a,'title',lang)}
                   </h2>
                 )}
-                {a.subtitle && (
+                {pick(a,'subtitle',lang) && (
                   <p style={{ fontSize: 'clamp(0.9rem, 1.5vw, 1.15rem)', opacity: 0.9, margin: '0 0 1.5rem', lineHeight: 1.5 }}>
-                    {a.subtitle}
+                    {pick(a,'subtitle',lang)}
                   </p>
                 )}
-                {a.linkUrl && a.linkText && (
+                {(a.linkUrl || pick(a,'linkUrl',lang)) && pick(a,'linkText',lang) && (
                   <Link
-                    href={a.linkUrl}
+                    href={a.linkUrl || pick(a,'linkUrl',lang)}
                     style={{
                       display: 'inline-block', background: '#fff', color: '#000',
                       padding: '0.75rem 2rem', fontSize: '0.85rem', fontWeight: 700,
@@ -73,7 +77,7 @@ export default function AdsBanner() {
                     onMouseEnter={e => { e.currentTarget.style.background = 'transparent'; e.currentTarget.style.color = '#fff'; }}
                     onMouseLeave={e => { e.currentTarget.style.background = '#fff'; e.currentTarget.style.color = '#000'; }}
                   >
-                    {a.linkText}
+                    {pick(a,'linkText',lang)}
                   </Link>
                 )}
               </div>

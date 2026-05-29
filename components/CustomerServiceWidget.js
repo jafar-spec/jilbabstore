@@ -82,24 +82,29 @@ export default function CustomerServiceWidget() {
 
   return (
     <>
-      {/* Floating Button */}
+      {/* Floating Customer Service Button */}
       <button
         onClick={() => setIsOpen(true)}
-        title="Customer Service"
+        title="Customer Service / خدمة العملاء"
         style={{
-          position: 'fixed', bottom: '5.5rem', right: '1.5rem', zIndex: 1100,
-          width: '54px', height: '54px', borderRadius: '50%',
-          background: 'linear-gradient(135deg, var(--accent-color), #8b5cf6)',
+          position: 'fixed', bottom: '2rem', right: '1.5rem', zIndex: 1100,
+          height: '52px',
+          borderRadius: '99px',
+          background: 'linear-gradient(135deg, #7c3aed, #a855f7)',
           border: 'none', cursor: 'pointer', color: '#fff',
-          boxShadow: '0 4px 20px rgba(0,0,0,0.25)',
-          display: 'flex', alignItems: 'center', justifyContent: 'center',
-          fontSize: '1.3rem', transition: 'transform 0.3s, box-shadow 0.3s'
+          boxShadow: '0 4px 24px rgba(124,58,237,0.45)',
+          display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px',
+          padding: '0 20px',
+          fontSize: '0.88rem', fontWeight: 700, letterSpacing: '0.03em',
+          transition: 'transform 0.3s, box-shadow 0.3s',
+          animation: 'cs-pulse 3s ease-in-out infinite'
         }}
-        onMouseEnter={e => { e.currentTarget.style.transform = 'scale(1.1)'; e.currentTarget.style.boxShadow = '0 6px 28px rgba(0,0,0,0.35)'; }}
-        onMouseLeave={e => { e.currentTarget.style.transform = 'scale(1)'; e.currentTarget.style.boxShadow = '0 4px 20px rgba(0,0,0,0.25)'; }}
+        onMouseEnter={e => { e.currentTarget.style.transform = 'scale(1.05)'; e.currentTarget.style.boxShadow = '0 6px 32px rgba(124,58,237,0.6)'; }}
+        onMouseLeave={e => { e.currentTarget.style.transform = 'scale(1)'; e.currentTarget.style.boxShadow = '0 4px 24px rgba(124,58,237,0.45)'; }}
         aria-label="Open Customer Service"
       >
-        <i className="fa-solid fa-headset"></i>
+        <i className="fa-solid fa-headset" style={{ fontSize: '1.1rem' }}></i>
+        <span className="cs-btn-label">خدمة العملاء</span>
       </button>
 
       {/* Modal Overlay */}

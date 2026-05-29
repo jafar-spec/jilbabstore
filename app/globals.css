@@ -1142,3 +1142,17 @@ button {
   transform: translateX(-50%);
 }
 
+/* ==========================================================================
+   Customer Service Widget
+   ========================================================================== */
+@keyframes cs-pulse {
+  0%, 100% { box-shadow: 0 4px 24px rgba(124,58,237,0.45); }
+  50% { box-shadow: 0 4px 32px rgba(124,58,237,0.75), 0 0 0 6px rgba(124,58,237,0.12); }
+}
+
+@media (max-width: 480px) {
+  .cs-btn-label {
+    display: none;
+  }
+}
+

@@ -1633,25 +1633,73 @@ export default function AdminDashboard() {
                             </div>
                           </div>
                           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '1rem' }}>
-                            <div>
-                              <label className="admin-label">العنوان (Title)</label>
-                              <input value={ad.title || ''} onChange={e => { const ads=[...(cmsSettings.ads||[])]; ads[idx]={...ad,title:e.target.value}; setCmsSettings({...cmsSettings,ads}); }} className="admin-input" placeholder="عرض خاص!" />
+                            {/* Multilingual Title */}
+                            <div style={{ gridColumn: '1 / -1', display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '1rem', background: 'var(--surface-color)', padding: '1rem', borderRadius: '8px', border: '1px solid var(--border-color)' }}>
+                              <div>
+                                <label className="admin-label">العنوان (عربي)</label>
+                                <input value={ad.title_ar || ad.title || ''} onChange={e => { const ads=[...(cmsSettings.ads||[])]; ads[idx]={...ad,title_ar:e.target.value,title:e.target.value}; setCmsSettings({...cmsSettings,ads}); }} className="admin-input" placeholder="عرض خاص!" />
+                              </div>
+                              <div>
+                                <label className="admin-label">Title (English)</label>
+                                <input value={ad.title_en || ''} onChange={e => { const ads=[...(cmsSettings.ads||[])]; ads[idx]={...ad,title_en:e.target.value}; setCmsSettings({...cmsSettings,ads}); }} className="admin-input" placeholder="Special Offer!" />
+                              </div>
+                              <div>
+                                <label className="admin-label">כותרת (עברית)</label>
+                                <input value={ad.title_he || ''} onChange={e => { const ads=[...(cmsSettings.ads||[])]; ads[idx]={...ad,title_he:e.target.value}; setCmsSettings({...cmsSettings,ads}); }} className="admin-input" placeholder="מבצע מיוחד!" />
+                              </div>
                             </div>
-                            <div>
-                              <label className="admin-label">شارة (Badge)</label>
-                              <input value={ad.badge || ''} onChange={e => { const ads=[...(cmsSettings.ads||[])]; ads[idx]={...ad,badge:e.target.value}; setCmsSettings({...cmsSettings,ads}); }} className="admin-input" placeholder="خصم 50%" />
+
+                            {/* Multilingual Subtitle */}
+                            <div style={{ gridColumn: '1 / -1', display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '1rem', background: 'var(--surface-color)', padding: '1rem', borderRadius: '8px', border: '1px solid var(--border-color)' }}>
+                              <div>
+                                <label className="admin-label">الوصف (عربي)</label>
+                                <input value={ad.subtitle_ar || ad.subtitle || ''} onChange={e => { const ads=[...(cmsSettings.ads||[])]; ads[idx]={...ad,subtitle_ar:e.target.value,subtitle:e.target.value}; setCmsSettings({...cmsSettings,ads}); }} className="admin-input" placeholder="تسوقي الآن" />
+                              </div>
+                              <div>
+                                <label className="admin-label">Subtitle (English)</label>
+                                <input value={ad.subtitle_en || ''} onChange={e => { const ads=[...(cmsSettings.ads||[])]; ads[idx]={...ad,subtitle_en:e.target.value}; setCmsSettings({...cmsSettings,ads}); }} className="admin-input" placeholder="Shop now" />
+                              </div>
+                              <div>
+                                <label className="admin-label">כתובית (עברית)</label>
+                                <input value={ad.subtitle_he || ''} onChange={e => { const ads=[...(cmsSettings.ads||[])]; ads[idx]={...ad,subtitle_he:e.target.value}; setCmsSettings({...cmsSettings,ads}); }} className="admin-input" placeholder="קנו עכשיו" />
+                              </div>
                             </div>
+
+                            {/* Multilingual Badge */}
+                            <div style={{ gridColumn: '1 / -1', display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '1rem', background: 'var(--surface-color)', padding: '1rem', borderRadius: '8px', border: '1px solid var(--border-color)' }}>
+                              <div>
+                                <label className="admin-label">شارة - Badge (عربي)</label>
+                                <input value={ad.badge_ar || ad.badge || ''} onChange={e => { const ads=[...(cmsSettings.ads||[])]; ads[idx]={...ad,badge_ar:e.target.value,badge:e.target.value}; setCmsSettings({...cmsSettings,ads}); }} className="admin-input" placeholder="خصم 50%" />
+                              </div>
+                              <div>
+                                <label className="admin-label">Badge (English)</label>
+                                <input value={ad.badge_en || ''} onChange={e => { const ads=[...(cmsSettings.ads||[])]; ads[idx]={...ad,badge_en:e.target.value}; setCmsSettings({...cmsSettings,ads}); }} className="admin-input" placeholder="50% OFF" />
+                              </div>
+                              <div>
+                                <label className="admin-label">תג (עברית)</label>
+                                <input value={ad.badge_he || ''} onChange={e => { const ads=[...(cmsSettings.ads||[])]; ads[idx]={...ad,badge_he:e.target.value}; setCmsSettings({...cmsSettings,ads}); }} className="admin-input" placeholder="50% הנחה" />
+                              </div>
+                            </div>
+
+                            {/* Multilingual Link Text */}
+                            <div style={{ gridColumn: '1 / -1', display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '1rem', background: 'var(--surface-color)', padding: '1rem', borderRadius: '8px', border: '1px solid var(--border-color)' }}>
+                              <div>
+                                <label className="admin-label">نص الزر (عربي)</label>
+                                <input value={ad.linkText_ar || ad.linkText || ''} onChange={e => { const ads=[...(cmsSettings.ads||[])]; ads[idx]={...ad,linkText_ar:e.target.value,linkText:e.target.value}; setCmsSettings({...cmsSettings,ads}); }} className="admin-input" placeholder="تسوق" />
+                              </div>
+                              <div>
+                                <label className="admin-label">Button Text (English)</label>
+                                <input value={ad.linkText_en || ''} onChange={e => { const ads=[...(cmsSettings.ads||[])]; ads[idx]={...ad,linkText_en:e.target.value}; setCmsSettings({...cmsSettings,ads}); }} className="admin-input" placeholder="Shop" />
+                              </div>
+                              <div>
+                                <label className="admin-label">טקסט כפתור (עברית)</label>
+                                <input value={ad.linkText_he || ''} onChange={e => { const ads=[...(cmsSettings.ads||[])]; ads[idx]={...ad,linkText_he:e.target.value}; setCmsSettings({...cmsSettings,ads}); }} className="admin-input" placeholder="קנה" />
+                              </div>
+                            </div>
+
                             <div style={{ gridColumn: '1 / -1' }}>
-                              <label className="admin-label">الوصف (Subtitle)</label>
-                              <input value={ad.subtitle || ''} onChange={e => { const ads=[...(cmsSettings.ads||[])]; ads[idx]={...ad,subtitle:e.target.value}; setCmsSettings({...cmsSettings,ads}); }} className="admin-input" placeholder="تسوقي الآن على جميع المنتجات" />
-                            </div>
-                            <div>
-                              <label className="admin-label">رابط الزر (Button URL)</label>
+                              <label className="admin-label">رابط الزر العام (Button URL)</label>
                               <input value={ad.linkUrl || ''} onChange={e => { const ads=[...(cmsSettings.ads||[])]; ads[idx]={...ad,linkUrl:e.target.value}; setCmsSettings({...cmsSettings,ads}); }} className="admin-input" placeholder="/#shop" />
-                            </div>
-                            <div>
-                              <label className="admin-label">نص الزر (Button Text)</label>
-                              <input value={ad.linkText || ''} onChange={e => { const ads=[...(cmsSettings.ads||[])]; ads[idx]={...ad,linkText:e.target.value}; setCmsSettings({...cmsSettings,ads}); }} className="admin-input" placeholder="تسوقي الآن" />
                             </div>
                             <div style={{ gridColumn: '1 / -1' }}>
                               <label className="admin-label">صورة الإعلان (Banner Image)</label>
