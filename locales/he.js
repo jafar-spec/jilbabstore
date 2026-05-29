@@ -1,0 +1,143 @@
+export default {
+  // General
+  storeName: "ג'ילבאב סטור",
+  announcement: "משלוח חינם בהזמנות מעל 200 ש״ח",
+  searchPlaceholder: "חפשי מוצר...",
+  home: "ראשי",
+  shop: "חנות",
+  women: "נשים",
+  men: "גברים",
+  kids: "ילדים",
+  khimars: "חימארים",
+  abayas: "עביות",
+  thawbs: "גלאביות",
+  accessories: "אביזרים",
+  girls: "בנות",
+  boys: "בנים",
+  collections: "קולקציות",
+  loading: "טוען...",
+  
+  // Hero
+  heroTitle: "שדרגי את הסטייל שלך.",
+  heroSubtitle: "אופנה צנועה שעוצבה לשקף את היופי הפנימי שלך. בדים יוקרתיים ופרטים יוצאי דופן.",
+  shopNow: "קני עכשיו",
+
+  // Products
+  noProducts: "אין מוצרים כרגע.",
+  newArrivals: "קולקציה חדשה",
+  jilbabs: "קולקציית ג'ילבאבים",
+  price: "₪",
+  chooseSize: "בחרי מידה",
+  addToCart: "הוסף לעגלה",
+  sizeRequired: "אנא בחרי מידה תחילה",
+  addedToCart: "המוצר נוסף לעגלה בהצלחה",
+  fastShipping: "משלוח מהיר",
+  fastShippingDesc: "אנו מציעים משלוח מהיר לכל הערים והאזורים.",
+  freeReturns: "החזרות קלות וחינמיות",
+  freeReturnsDesc: "ניתן להחזיר את המוצר תוך 14 ימים.",
+  securePayment: "100% תשלום מאובטח",
+  securePaymentDesc: "העסקאות שלך מוצפנות ומאובטחות על ידי CreditGuard.",
+  outOfStock: "מצטערים, מידה זו אזלה מהמלאי",
+  onlyLeftInStock: "נשארו רק {count} במלאי",
+  soldOut: "אזל מהמלאי",
+  quantity: "כמות:",
+  reviews: "חוות דעת",
+  noReviews: "אין חוות דעת עדיין",
+  customerReviews: "חוות דעת לקוחות",
+  beFirstToReview: "היי הראשונה לחוות דעה על מוצר זה!",
+  writeReview: "כתיבת חוות דעת",
+  rating: "דירוג",
+  yourName: "שם מלא",
+  yourReview: "חוות הדעת שלך",
+  submitReview: "שליחת חוות דעת",
+
+  // Cart
+  cartTitle: "עגלת קניות",
+  emptyCart: "העגלה ריקה.",
+  checkoutBtn: "המשך לתשלום",
+  total: "סך הכל:",
+  remove: "הסר",
+  size: "מידה:",
+
+  // Footer
+  aboutStore: "אנו מציעים לך את קולקציות הג'ילבאב והחימאר המשובחות ביותר עם נגיעה מודרנית ששומרת על צניעות ואלגנטיות.",
+  importantLinks: "קישורים חשובים",
+  securePaymentFooter: "תשלום מאובטח",
+  secureDesc: "אנו מבטיחים חווית קנייה מאובטחת 100% המגובה בטכנולוגיות ההצפנה החדישות ביותר.",
+  allRightsReserved: "כל הזכויות שמורות.",
+  privacyPolicy: "מדיניות פרטיות",
+  returnPolicy: "מדיניות החזרות",
+  newsletterTitle: "הצטרפי למגזין שלנו",
+  newsletterSubtitle: "הירשמי לקבלת עדכונים, גישה למבצעים בלעדיים ועוד.",
+  newsletterPlaceholder: "הזיני את כתובת האימייל שלך",
+  subscribe: "להרשמה",
+  newsletterSuccess: "תודה שנרשמת!",
+  newsletterError: "שגיאה ברישום",
+
+  // Checkout
+  checkoutTitle: "המשך לתשלום מאובטח",
+  shippingInfo: "פרטי משלוח",
+  fullName: "שם מלא",
+  phone: "מספר טלפון",
+  address: "כתובת מפורטת",
+  city: "עיר",
+  paymentInfo: "פרטי תשלום (הדמיית CreditGuard)",
+  cardNumber: "מספר כרטיס",
+  expiry: "תוקף",
+  cvv: "CVV",
+  payNow: "שלם עכשיו",
+  orderSuccess: "התשלום בוצע בהצלחה! מספר ההזמנה שלך הוא:",
+  processing: "מעבד...",
+  email: "אימייל",
+  next: "המשך",
+  back: "חזור",
+  apply: "החל",
+  subtotal: "סכום ביניים",
+  discount: "הנחה",
+  promoCode: "קוד קופון",
+
+  // Tracking
+  trackingTitle: "מעקב אחר ההזמנה שלך",
+  trackingDesc: "הזיני את מספר ההזמנה שלך כדי לעקוב אחר סטטוס המשלוח.",
+  trackingPlaceholder: "מספר הזמנה (לדוגמה: abc123xyz)",
+  trackBtn: "עקבי",
+  orderNotFound: "לא נמצאה הזמנה עם מספר זה.",
+  orderTrackingError: "אירעה שגיאה במהלך המעקב.",
+  order: "הזמנה",
+  cancelled: "הזמנה זו בוטלה",
+  customerDetails: "פרטי לקוח",
+  nameLabel: "שם:",
+  addressLabel: "כתובת:",
+  noSections: "לא נוספו קטגוריות עדיין.",
+  emptySection: "אין מוצרים בקטגוריה זו כרגע.",
+
+  // Product details
+  quantityExceedsStock: "הכמות המבוקשת אינה זמינה. זמין במלאי: {count}",
+  reviewFieldsRequired: "אנא הזיני את שמך ואת חוות הדעת שלך",
+  reviewAddedSuccess: "חוות הדעת נוספה בהצלחה",
+  reviewAddedError: "שגיאה בהוספת חוות הדעת",
+
+  // Checkout alerts
+  fillShippingInfo: "אנא מלאי את כל פרטי המשלוח",
+  promoApplied: "קוד הקופון הוחל בהצלחה",
+  invalidPromo: "קוד קופון לא תקף",
+  fillPaymentInfo: "אנא מלאי את כל פרטי התשלום",
+  checkoutError: "אירעה שגיאה במהלך התשלום",
+
+  // Navigation
+  trackOrder: "מעקב הזמנות",
+  wishlist: "מועדפים",
+  profile: "החשבון שלי",
+
+  // Wishlist
+  wishlistTitle: "המועדפים שלי",
+  wishlistSubtitle: "מוצרים ששמרת לקנייה מאוחרת יותר.",
+  wishlistEmpty: "רשימת המועדפים שלך ריקה",
+  browseStore: "דפדפי בחנות",
+
+  // Timeline
+  statusProcessing: "בטיפול",
+  statusDelivery: "בדרך אלייך",
+  statusDelivered: "נמסר"
+};
+

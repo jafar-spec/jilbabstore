@@ -1,0 +1,143 @@
+export default {
+  // General
+  storeName: "Jilbab Store",
+  announcement: "Free Shipping on Orders Over 200 NIS",
+  searchPlaceholder: "Search for products...",
+  home: "Home",
+  shop: "Shop",
+  women: "Women",
+  men: "Men",
+  kids: "Kids",
+  collections: "Collections",
+  loading: "Loading...",
+  
+  // Hero
+  heroTitle: "Elevate your elegance.",
+  heroSubtitle: "Modest fashion designed to reflect your inner beauty. Premium fabrics, exceptional details.",
+  shopNow: "Shop Now",
+
+  // Products
+  noProducts: "No products found.",
+  newArrivals: "New Arrivals",
+  jilbabs: "Jilbab Collection",
+  khimars: "Khimars",
+  abayas: "Abayas",
+  thawbs: "Thawbs",
+  accessories: "Accessories",
+  girls: "Girls",
+  boys: "Boys",
+  price: "NIS",
+  chooseSize: "Choose Size",
+  addToCart: "Add to Cart",
+  sizeRequired: "Please choose a size first",
+  addedToCart: "Product added to cart successfully",
+  fastShipping: "Fast Shipping",
+  fastShippingDesc: "We offer fast shipping to all cities and regions.",
+  freeReturns: "Easy & Free Returns",
+  freeReturnsDesc: "You can return the product within 14 days.",
+  securePayment: "100% Secure Payment",
+  securePaymentDesc: "Your transactions are encrypted and protected by CreditGuard.",
+  outOfStock: "Sorry, this size is out of stock",
+  onlyLeftInStock: "Only {count} left in stock",
+  soldOut: "Sold Out",
+  quantity: "Quantity:",
+  reviews: "reviews",
+  noReviews: "No reviews yet",
+  customerReviews: "Customer Reviews",
+  beFirstToReview: "Be the first to review this product!",
+  writeReview: "Write a Review",
+  rating: "Rating",
+  yourName: "Your Name",
+  yourReview: "Your Review",
+  submitReview: "Submit Review",
+
+  // Cart
+  cartTitle: "Shopping Cart",
+  emptyCart: "Your cart is empty.",
+  checkoutBtn: "Checkout",
+  total: "Total:",
+  remove: "Remove",
+  size: "Size:",
+
+  // Footer
+  aboutStore: "We offer the finest collections of Jilbabs and Khimars with a modern touch that maintains modesty and elegance.",
+  importantLinks: "Important Links",
+  securePaymentFooter: "Secure Payment",
+  secureDesc: "We guarantee a 100% secure shopping experience backed by the latest encryption technologies.",
+  allRightsReserved: "All rights reserved.",
+  privacyPolicy: "Privacy Policy",
+  returnPolicy: "Return Policy",
+  newsletterTitle: "Join Our Journal",
+  newsletterSubtitle: "Subscribe to receive updates, access to exclusive deals, and more.",
+  newsletterPlaceholder: "Enter your email address",
+  subscribe: "Subscribe",
+  newsletterSuccess: "Thank you for subscribing!",
+  newsletterError: "Error subscribing",
+
+  // Checkout
+  checkoutTitle: "Secure Checkout",
+  shippingInfo: "Shipping Information",
+  fullName: "Full Name",
+  phone: "Phone Number",
+  address: "Detailed Address",
+  city: "City",
+  paymentInfo: "Payment Details (CreditGuard Mock)",
+  cardNumber: "Card Number",
+  expiry: "Expiry Date",
+  cvv: "CVV",
+  payNow: "Pay Now",
+  orderSuccess: "Payment successful! Your order number is:",
+  processing: "Processing...",
+  email: "Email",
+  next: "Next",
+  back: "Back",
+  apply: "Apply",
+  subtotal: "Subtotal",
+  discount: "Discount",
+  promoCode: "Promo Code",
+
+  // Tracking
+  trackingTitle: "Track Your Order",
+  trackingDesc: "Enter your Order ID to track its delivery status.",
+  trackingPlaceholder: "Order ID (e.g. abc123xyz)",
+  trackBtn: "Track",
+  orderNotFound: "No order found with this ID.",
+  orderTrackingError: "An error occurred while tracking.",
+  order: "Order",
+  cancelled: "This order was cancelled",
+  customerDetails: "Customer Details",
+  nameLabel: "Name:",
+  addressLabel: "Address:",
+  noSections: "No sections available.",
+  emptySection: "No products in this section currently.",
+
+  // Product details
+  quantityExceedsStock: "Requested quantity exceeds stock. Available: {count}",
+  reviewFieldsRequired: "Please enter your name and review",
+  reviewAddedSuccess: "Review added successfully",
+  reviewAddedError: "Error adding review",
+
+  // Checkout alerts
+  fillShippingInfo: "Please fill all shipping information",
+  promoApplied: "Promo code applied successfully",
+  invalidPromo: "Invalid promo code",
+  fillPaymentInfo: "Please fill all payment information",
+  checkoutError: "An error occurred during checkout",
+
+  // Navigation
+  trackOrder: "Track Order",
+  wishlist: "Wishlist",
+  profile: "Profile",
+
+  // Wishlist
+  wishlistTitle: "My Wishlist",
+  wishlistSubtitle: "Items you have saved to buy later.",
+  wishlistEmpty: "Your wishlist is empty",
+  browseStore: "Browse Store",
+
+  // Timeline
+  statusProcessing: "Processing",
+  statusDelivery: "Out for Delivery",
+  statusDelivered: "Delivered"
+};
+

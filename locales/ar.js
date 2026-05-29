@@ -1,0 +1,143 @@
+export default {
+  // General
+  storeName: "متجر جلباب",
+  announcement: "شحن مجاني للطلبات فوق 200 شيكل",
+  searchPlaceholder: "ابحثي عن منتج...",
+  home: "الرئيسية",
+  shop: "المتجر",
+  women: "نسائي",
+  men: "رجالي",
+  kids: "أطفال",
+  collections: "التشكيلات",
+  loading: "جاري التحميل...",
+  
+  // Hero
+  heroTitle: "ارتقِ بأناقتك.",
+  heroSubtitle: "أزياء محتشمة صُممت لتعكس جمالك الداخلي. خامات فاخرة، وتفاصيل استثنائية.",
+  shopNow: "تسوقي الآن",
+
+  // Products
+  noProducts: "لا توجد منتجات.",
+  newArrivals: "وصل حديثاً",
+  jilbabs: "تشكيلة الجلابيب",
+  khimars: "خمارات",
+  abayas: "عبايات",
+  thawbs: "أثواب",
+  accessories: "إكسسوارات",
+  girls: "بناتي",
+  boys: "ولادي",
+  price: "شيكل",
+  chooseSize: "اختر المقاس",
+  addToCart: "أضف إلى السلة",
+  sizeRequired: "يرجى اختيار المقاس أولاً",
+  addedToCart: "تم إضافة المنتج إلى السلة بنجاح",
+  fastShipping: "توصيل سريع",
+  fastShippingDesc: "نوفر شحن سريع لجميع المدن والمناطق.",
+  freeReturns: "إرجاع مجاني وسهل",
+  freeReturnsDesc: "يمكنك إرجاع المنتج خلال 14 يوماً.",
+  securePayment: "دفع آمن 100%",
+  securePaymentDesc: "معاملاتك مشفرة ومحمية عبر CreditGuard.",
+  outOfStock: "عذراً، هذا المقاس نفذ من المخزون",
+  onlyLeftInStock: "تبقى {count} فقط في المخزون",
+  soldOut: "نفذت الكمية",
+  quantity: "الكمية:",
+  reviews: "تقييمات",
+  noReviews: "لا يوجد تقييمات بعد",
+  customerReviews: "تقييمات العملاء",
+  beFirstToReview: "كن أول من يقيّم هذا المنتج!",
+  writeReview: "أضف تقييمك",
+  rating: "التقييم",
+  yourName: "الاسم",
+  yourReview: "رأيك بالمنتج",
+  submitReview: "إرسال التقييم",
+
+  // Cart
+  cartTitle: "عربة التسوق",
+  emptyCart: "السلة فارغة.",
+  checkoutBtn: "إتمام الطلب",
+  total: "المجموع:",
+  remove: "حذف",
+  size: "المقاس:",
+
+  // Footer
+  aboutStore: "نقدم لكِ أرقى تشكيلات الجلابيب والخمارات بلمسة عصرية تحافظ على الاحتشام والأناقة.",
+  importantLinks: "روابط هامة",
+  securePaymentFooter: "الدفع الآمن",
+  secureDesc: "نضمن لك تجربة تسوق آمنة 100% مدعومة بأحدث تقنيات التشفير.",
+  allRightsReserved: "جميع الحقوق محفوظة.",
+  privacyPolicy: "سياسة الخصوصية",
+  returnPolicy: "سياسة الإرجاع",
+  newsletterTitle: "انضمي إلى مجلتنا",
+  newsletterSubtitle: "اشتركي للحصول على آخر التحديثات والعروض الحصرية والمزيد.",
+  newsletterPlaceholder: "أدخلي بريدك الإلكتروني",
+  subscribe: "اشتراك",
+  newsletterSuccess: "شكراً لاشتراككِ!",
+  newsletterError: "حدث خطأ أثناء الاشتراك",
+
+  // Checkout
+  checkoutTitle: "إتمام الطلب الدفع الآمن",
+  shippingInfo: "معلومات الشحن",
+  fullName: "الاسم الكامل",
+  phone: "رقم الهاتف",
+  address: "العنوان بالتفصيل",
+  city: "المدينة",
+  paymentInfo: "بيانات الدفع (محاكاة CreditGuard)",
+  cardNumber: "رقم البطاقة",
+  expiry: "تاريخ الانتهاء",
+  cvv: "رمز الحماية (CVV)",
+  payNow: "دفع الآن",
+  orderSuccess: "تمت عملية الدفع بنجاح! رقم طلبك هو:",
+  processing: "جاري المعالجة...",
+  email: "البريد الإلكتروني",
+  next: "التالي",
+  back: "رجوع",
+  apply: "تطبيق",
+  subtotal: "المجموع الفرعي",
+  discount: "الخصم",
+  promoCode: "كود الخصم",
+
+  // Tracking
+  trackingTitle: "تتبع طلبك",
+  trackingDesc: "أدخل رقم الطلب الخاص بك لمعرفة حالة التوصيل.",
+  trackingPlaceholder: "رقم الطلب (مثال: abc123xyz)",
+  trackBtn: "تتبع",
+  orderNotFound: "لم يتم العثور على طلب بهذا الرقم.",
+  orderTrackingError: "حدث خطأ أثناء البحث عن الطلب.",
+  order: "الطلب",
+  cancelled: "هذا الطلب ملغي",
+  customerDetails: "تفاصيل العميل",
+  nameLabel: "الاسم:",
+  addressLabel: "العنوان:",
+  noSections: "لم يتم إضافة أقسام بعد.",
+  emptySection: "لا يوجد منتجات في هذا القسم حالياً.",
+
+  // Product details
+  quantityExceedsStock: "الكمية المطلوبة غير متوفرة. المتاح: {count}",
+  reviewFieldsRequired: "الرجاء إدخال الاسم والتقييم",
+  reviewAddedSuccess: "تمت إضافة التقييم بنجاح",
+  reviewAddedError: "حدث خطأ أثناء إضافة التقييم",
+
+  // Checkout alerts
+  fillShippingInfo: "يرجى تعبئة جميع معلومات الشحن",
+  promoApplied: "تم تطبيق الكوبون بنجاح",
+  invalidPromo: "كود الخصم غير صالح",
+  fillPaymentInfo: "يرجى تعبئة جميع معلومات الدفع",
+  checkoutError: "حدث خطأ أثناء إتمام الطلب",
+
+  // Navigation
+  trackOrder: "تتبع الطلب",
+  wishlist: "المفضلة",
+  profile: "حسابي",
+
+  // Wishlist
+  wishlistTitle: "المفضلة",
+  wishlistSubtitle: "المنتجات التي قمت بحفظها لشرائها لاحقاً.",
+  wishlistEmpty: "المفضلة فارغة",
+  browseStore: "تصفح المتجر",
+
+  // Timeline
+  statusProcessing: "قيد المعالجة",
+  statusDelivery: "جاري التوصيل",
+  statusDelivered: "تم التوصيل"
+};
+

@@ -1,0 +1,14 @@
+runConfig:
+  runtime: nodejs22
+  cpu: 1
+  memoryMiB: 512
+  concurrency: 80
+
+outputFiles:
+  serverApp:
+    include:
+      - .next
+      - node_modules
+      - package.json
+      - next.config.mjs
+      - public

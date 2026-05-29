@@ -1,0 +1,78 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>متجر جلباب | أزياء محتشمة فاخرة</title>
+    <meta name="description" content="اكتشفي الجلابيب الفاخرة والأنيقة وعالية الجودة. أزياء محتشمة بمفهوم جديد.">
+    <link rel="stylesheet" href="style.css">
+    <!-- Font Awesome for Icons -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+</head>
+<body>
+
+    <!-- Header / Navbar -->
+    <header>
+        <div class="logo">متجر <span>جلباب</span></div>
+        <nav>
+            <ul>
+                <li><a href="#home">الرئيسية</a></li>
+                <li><a href="#shop">المتجر</a></li>
+                <li><a href="#about">عنا</a></li>
+            </ul>
+        </nav>
+        <button class="cart-icon" id="cart-toggle-btn" aria-label="فتح عربة التسوق">
+            <i class="fa-solid fa-bag-shopping"></i>
+            <span class="cart-count" id="cart-count">0</span>
+        </button>
+    </header>
+
+    <!-- Hero Section -->
+    <section class="hero" id="home">
+        <div class="hero-content">
+            <h1>الأناقة في الاحتشام</h1>
+            <p>اكتشفي مجموعتنا الحصرية من الجلابيب الفاخرة، المصممة للراحة والأناقة والجمال.</p>
+            <a href="#shop" class="btn-primary">تسوقي المجموعة</a>
+        </div>
+    </section>
+
+    <!-- Products Section -->
+    <section class="products" id="shop">
+        <h2 class="section-title"><span>مجموعتنا</span></h2>
+        
+        <div class="product-grid" id="product-grid">
+            <!-- Products will be injected here via JavaScript -->
+        </div>
+    </section>
+
+    <!-- Shopping Cart Sidebar -->
+    <div class="cart-overlay" id="cart-overlay"></div>
+    <aside class="cart-sidebar" id="cart-sidebar">
+        <div class="cart-header">
+            <h2>عربة التسوق</h2>
+            <button class="close-cart" id="close-cart-btn" aria-label="إغلاق العربة">
+                <i class="fa-solid fa-xmark"></i>
+            </button>
+        </div>
+        
+        <div class="cart-items" id="cart-items-container">
+            <!-- Cart items will be injected here via JavaScript -->
+        </div>
+        
+        <div class="cart-footer">
+            <div class="cart-total">
+                <span>الإجمالي:</span>
+                <span id="cart-total-price">$0.00</span>
+            </div>
+            <button class="checkout-btn">الدفع الآمن</button>
+        </div>
+    </aside>
+
+    <!-- Footer -->
+    <footer id="about">
+        <p>&copy; 2026 متجر جلباب. جميع الحقوق محفوظة. أزياء محتشمة فاخرة.</p>
+    </footer>
+
+    <script src="script.js"></script>
+</body>
+</html>
