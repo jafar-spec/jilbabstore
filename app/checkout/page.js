@@ -138,10 +138,20 @@ export default function Checkout() {
     setIsProcessing(true);
     
     try {
+      // Sanitize cart items to prevent Firestore 1MB document size limit exceeded errors
+      // (Base64 images take up huge amounts of space and aren't needed in the order document)
+      const sanitizedCart = cart.map(item => {
+        const sanitizedItem = { ...item };
+        delete sanitizedItem.images; 
+        delete sanitizedItem.image;
+        delete sanitizedItem.description;
+        return sanitizedItem;
+      });
+
       const newOrder = {
         date: new Date().toISOString(),
         customerInfo: { ...formData, email: user ? user.email : formData.email || '' },
-        items: cart,
+        items: sanitizedCart,
         subtotal: Number(cartTotal) || 0,
         discount: Number(discountAmount) || 0,
         promoCode: appliedPromo ? appliedPromo.code : null,
