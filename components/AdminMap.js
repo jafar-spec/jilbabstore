@@ -81,6 +81,15 @@ export default function AdminMap({ orders }) {
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.5rem', flexWrap: 'wrap', gap: '10px' }}>
         <h3 style={{ color: 'var(--text-primary)', margin: 0 }}><i className="fa-solid fa-map-location-dot"></i> خريطة التوزيع الجغرافي للطلبات</h3>
         <div style={{ display: 'flex', gap: '15px', alignItems: 'center' }}>
+          <button 
+            onClick={() => {
+              localStorage.removeItem('jilbabstore_geocache');
+              window.location.reload();
+            }}
+            style={{ background: 'none', border: '1px solid var(--border-color)', padding: '4px 8px', borderRadius: '4px', fontSize: '0.8rem', cursor: 'pointer', color: 'var(--text-secondary)' }}
+          >
+            <i className="fa-solid fa-rotate-right"></i> تحديث الخرائط
+          </button>
           {loading && <span style={{ fontSize: '0.9rem', color: 'var(--text-secondary)' }}><i className="fa-solid fa-circle-notch fa-spin"></i> جاري تحميل الإحداثيات... {progress}%</span>}
           <div style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '0.85rem' }}>
             <span style={{ display: 'inline-block', width: '12px', height: '12px', background: '#e74c3c', borderRadius: '50%' }}></span> قيد المعالجة
