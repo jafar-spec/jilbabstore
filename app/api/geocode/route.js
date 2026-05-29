@@ -10,7 +10,9 @@ export async function GET(request) {
 
   try {
     // Photon by Komoot (Built on Nominatim but with fuzzy ElasticSearch for typos)
-    const url = `https://photon.komoot.io/api/?q=${encodeURIComponent(q)}&limit=1`;
+    // Bounding Box limits search strictly to Israel/Palestine (minLon,minLat,maxLon,maxLat)
+    const bbox = '34.0,29.4,35.9,33.4';
+    const url = `https://photon.komoot.io/api/?q=${encodeURIComponent(q)}&bbox=${bbox}&limit=1`;
     
     const response = await fetch(url, {
       headers: {

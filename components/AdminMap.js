@@ -38,23 +38,22 @@ export default function AdminMap({ orders }) {
         const parts = [addrObj.city, addrObj.neighborhood, addrObj.street].filter(Boolean);
         if (parts.length === 0) continue;
         
-        // Try full address
-        const fullAddress = parts.join(', ') + ', Israel';
-        let coords = await geocodeAddress(fullAddress);
+        // 1. Try the full exact address exactly as typed
+        let coords = await geocodeAddress(parts.join(', '));
         
-        // Fallback 1: Just City + Israel
-        if (!coords && addrObj.city) {
-          coords = await geocodeAddress(addrObj.city + ', Israel');
-        }
-        
-        // Fallback 2: Just the City name (Nominatim might map some towns without the Israel suffix)
+        // 2. If it fails, fallback strictly to the City Name
         if (!coords && addrObj.city) {
           coords = await geocodeAddress(addrObj.city);
         }
+        
         if (coords) {
+          // Add a tiny microscopic random offset so if 3 orders are from the exact same city, the pins don't stack invisibly on top of each other!
+          const offsetLat = (Math.random() - 0.5) * 0.005;
+          const offsetLng = (Math.random() - 0.5) * 0.005;
+          
           newMarkers.push({
             id: order.id,
-            coords: [coords.lat, coords.lng],
+            coords: [coords.lat + offsetLat, coords.lng + offsetLng],
             customerName: addrObj.fullName || 'غير متوفر',
             total: order.total,
             status: order.status,
