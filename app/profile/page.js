@@ -104,7 +104,7 @@ export default function ProfilePage() {
       setError('');
     } catch (err) {
       console.error(err);
-      setError('حدث خطأ. تأكد من إدخال الرقم بالصيغة الدولية (+972...).');
+      setError(`حدث خطأ: ${err.message}`);
       if (window.recaptchaVerifier) window.recaptchaVerifier.render().then(wId => window.recaptchaVerifier.reset(wId));
     } finally {
       setLoading(false);

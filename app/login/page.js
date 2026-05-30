@@ -86,7 +86,7 @@ export default function LoginPage() {
       setError('');
     } catch (err) {
       console.error(err);
-      setError('حدث خطأ أثناء إرسال الرمز. تأكد من إدخال الرقم بالصيغة الدولية (+972...).');
+      setError(`حدث خطأ: ${err.message}`);
       // Reset recaptcha on error
       if (window.recaptchaVerifier) window.recaptchaVerifier.render().then(wId => window.recaptchaVerifier.reset(wId));
     } finally {
