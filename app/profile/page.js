@@ -50,6 +50,16 @@ export default function ProfilePage() {
     return () => unsubscribe();
   }, []);
 
+  // Cleanup recaptcha on unmount to prevent 'element has been removed' on route changes
+  useEffect(() => {
+    return () => {
+      if (window.recaptchaVerifier) {
+        try { window.recaptchaVerifier.clear(); } catch(e) {}
+        window.recaptchaVerifier = null;
+      }
+    };
+  }, []);
+
   // Recaptcha initialization is now handled dynamically on submit
 
   const handleEmailAuth = async (e) => {
@@ -102,6 +112,16 @@ export default function ProfilePage() {
       setShowOtpInput(true);
       setError('');
     } catch (err) {
+      if (err.message && err.message.includes('reCAPTCHA client element has been removed')) {
+        console.log('Recaptcha element removed, recreating and retrying...');
+        if (window.recaptchaVerifier) {
+          try { window.recaptchaVerifier.clear(); } catch(e){}
+          window.recaptchaVerifier = null;
+        }
+        // Auto-retry once
+        return handleSendOtp(e);
+      }
+      
       console.error(err);
       setError(`حدث خطأ: ${err.message}`);
       if (window.recaptchaVerifier) {

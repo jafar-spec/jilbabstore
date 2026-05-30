@@ -80,6 +80,16 @@ export default function LoginPage() {
       setShowOtpInput(true);
       setError('');
     } catch (err) {
+      if (err.message && err.message.includes('reCAPTCHA client element has been removed')) {
+        console.log('Recaptcha element removed, recreating and retrying...');
+        if (window.recaptchaVerifier) {
+          try { window.recaptchaVerifier.clear(); } catch(e){}
+          window.recaptchaVerifier = null;
+        }
+        // Auto-retry once
+        return handleSendOtp(e);
+      }
+
       console.error(err);
       setError(`حدث خطأ: ${err.message}`);
       // Clear recaptcha on error to fix 'client element has been removed' issues
