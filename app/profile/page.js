@@ -143,10 +143,10 @@ export default function ProfilePage() {
       <Navbar cartCount={0} />
       <div style={{ minHeight: '100vh', background: 'var(--bg-color)', paddingTop: '100px', paddingBottom: '4rem' }}>
         <div className="container" style={{ maxWidth: '800px', margin: '0 auto' }}>
+          <div id="recaptcha-container-profile"></div>
           
           {!user ? (
             <div style={{ background: 'var(--surface-color)', padding: '3rem', borderRadius: '16px', border: '1px solid var(--glass-border)', boxShadow: '0 10px 30px rgba(0,0,0,0.05)' }}>
-              <div id="recaptcha-container-profile"></div>
               <div style={{ textAlign: 'center', marginBottom: '2rem' }}>
                 <h1 style={{ fontSize: '1.8rem', color: 'var(--text-primary)', marginBottom: '0.5rem' }}>تسجيل الدخول / إنشاء حساب</h1>
                 <p style={{ color: 'var(--text-secondary)' }}>سجل دخولك لتتبع طلباتك وإدارة حسابك بسهولة</p>
