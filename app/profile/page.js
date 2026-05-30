@@ -24,6 +24,7 @@ export default function ProfilePage() {
   const [otp, setOtp] = useState('');
   const [confirmationResult, setConfirmationResult] = useState(null);
   const [showOtpInput, setShowOtpInput] = useState(false);
+  const [recaptchaKey, setRecaptchaKey] = useState(0);
   
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(true);
@@ -118,8 +119,11 @@ export default function ProfilePage() {
           try { window.recaptchaVerifier.clear(); } catch(e){}
           window.recaptchaVerifier = null;
         }
-        // Auto-retry once
-        return handleSendOtp(e);
+        // Force React to recreate the DOM node
+        setRecaptchaKey(prev => prev + 1);
+        setError('جاري إعادة التهيئة، يرجى النقر على إرسال مرة أخرى.');
+        setLoading(false);
+        return; // User needs to click again after React re-renders
       }
       
       console.error(err);
@@ -127,6 +131,7 @@ export default function ProfilePage() {
       if (window.recaptchaVerifier) {
         try { window.recaptchaVerifier.clear(); } catch(e){}
         window.recaptchaVerifier = null;
+        setRecaptchaKey(prev => prev + 1);
       }
     } finally {
       setLoading(false);
@@ -163,7 +168,7 @@ export default function ProfilePage() {
       <Navbar cartCount={0} />
       <div style={{ minHeight: '100vh', background: 'var(--bg-color)', paddingTop: '100px', paddingBottom: '4rem' }}>
         <div className="container" style={{ maxWidth: '800px', margin: '0 auto' }}>
-          <div id="recaptcha-container-profile"></div>
+          <div key={recaptchaKey} id="recaptcha-container-profile"></div>
           
           {!user ? (
             <div style={{ background: 'var(--surface-color)', padding: '3rem', borderRadius: '16px', border: '1px solid var(--glass-border)', boxShadow: '0 10px 30px rgba(0,0,0,0.05)' }}>
