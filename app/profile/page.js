@@ -19,7 +19,8 @@ export default function ProfilePage() {
   const [isSignUp, setIsSignUp] = useState(false);
   
   // Phone Auth State
-  const [phone, setPhone] = useState('+972');
+  const [countryCode, setCountryCode] = useState('+972');
+  const [localPhone, setLocalPhone] = useState('');
   const [otp, setOtp] = useState('');
   const [confirmationResult, setConfirmationResult] = useState(null);
   const [showOtpInput, setShowOtpInput] = useState(false);
@@ -86,13 +87,18 @@ export default function ProfilePage() {
 
   const handleSendOtp = async (e) => {
     e.preventDefault();
-    if (!phone) return setError('أدخل رقم الهاتف');
+    if (!localPhone) return setError('أدخل رقم الهاتف');
+    
+    // Format phone: remove leading zero from local phone if present
+    const formattedLocal = localPhone.replace(/^0+/, '');
+    const finalPhone = `${countryCode}${formattedLocal}`;
+    
     setLoading(true);
     setError('');
     
     try {
       const appVerifier = window.recaptchaVerifier;
-      const result = await signInWithPhoneNumber(auth, phone, appVerifier);
+      const result = await signInWithPhoneNumber(auth, finalPhone, appVerifier);
       setConfirmationResult(result);
       setShowOtpInput(true);
       setError('');
@@ -163,15 +169,36 @@ export default function ProfilePage() {
                 <form onSubmit={showOtpInput ? handleVerifyOtp : handleSendOtp} style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
                   {!showOtpInput ? (
                     <div>
-                      <label style={{ display: 'block', marginBottom: '0.5rem', fontWeight: 'bold', color: 'var(--text-primary)' }}>رقم الهاتف (مع الرمز الدولي)</label>
-                      <input 
-                        type="tel" 
-                        value={phone}
-                        onChange={(e) => { setPhone(e.target.value); setError(''); }}
-                        style={{ width: '100%', padding: '1rem', borderRadius: '8px', border: '1px solid var(--border-color)', background: 'var(--bg-color)', color: 'var(--text-primary)', outline: 'none', fontSize: '1.1rem', letterSpacing: '2px' }}
-                        dir="ltr"
-                        required
-                      />
+                      <label style={{ display: 'block', marginBottom: '0.5rem', fontWeight: 'bold', color: 'var(--text-primary)' }}>رقم الهاتف</label>
+                      <div style={{ display: 'flex', gap: '0.5rem' }}>
+                        <select
+                          value={countryCode}
+                          onChange={(e) => setCountryCode(e.target.value)}
+                          style={{ padding: '1rem', borderRadius: '8px', border: '1px solid var(--border-color)', background: 'var(--surface-color)', color: 'var(--text-primary)', outline: 'none', width: '110px' }}
+                          dir="ltr"
+                        >
+                          <option value="+972">IL (+972)</option>
+                          <option value="+970">PS (+970)</option>
+                          <option value="+962">JO (+962)</option>
+                          <option value="+20">EG (+20)</option>
+                          <option value="+971">AE (+971)</option>
+                          <option value="+966">SA (+966)</option>
+                          <option value="+1">US (+1)</option>
+                          <option value="+44">UK (+44)</option>
+                        </select>
+                        <input 
+                          type="tel" 
+                          placeholder="مثال: 0591234567" 
+                          value={localPhone}
+                          onChange={(e) => { setLocalPhone(e.target.value.replace(/\\D/g, '')); setError(''); }}
+                          style={{ flex: 1, padding: '1rem', borderRadius: '8px', border: '1px solid var(--border-color)', background: 'var(--bg-color)', color: 'var(--text-primary)', outline: 'none', fontSize: '1.1rem', letterSpacing: '1px' }}
+                          dir="ltr"
+                          required
+                        />
+                      </div>
+                      <p style={{ fontSize: '0.85rem', color: 'var(--text-secondary)', marginTop: '0.5rem' }}>
+                        يمكنك إدخال الرقم مع أو بدون الصفر في البداية.
+                      </p>
                     </div>
                   ) : (
                     <div>
