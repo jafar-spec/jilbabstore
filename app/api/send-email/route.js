@@ -1,7 +1,8 @@
 import { Resend } from 'resend';
 import { adminAuth } from '@/lib/firebaseAdmin';
 
-const resend = new Resend(process.env.RESEND_API_KEY);
+// Provide a dummy key during build time if environment variables aren't loaded yet
+const resend = new Resend(process.env.RESEND_API_KEY || 're_dummy_key_for_build_purposes');
 
 export async function POST(req) {
   try {
