@@ -12,11 +12,31 @@ export default function ProductGrid({ title, products, subsections = [], emptyMe
   const { t, lang } = useLanguage();
   const { toggleWishlist, isInWishlist } = useWishlist();
   const [activeSubsection, setActiveSubsection] = useState(null);
+  const [showFilters, setShowFilters] = useState(false);
+  const [priceMin, setPriceMin] = useState('');
+  const [priceMax, setPriceMax] = useState('');
+  const [sortBy, setSortBy] = useState('date_desc'); // date_desc, price_asc, price_desc
   useScrollReveal();
 
-  const filteredProducts = activeSubsection
+  let filteredProducts = activeSubsection
     ? products.filter(p => p.subsectionId === activeSubsection)
-    : products;
+    : [...products];
+
+  // Apply Price Filters
+  if (priceMin) {
+    filteredProducts = filteredProducts.filter(p => Number(p.price) >= Number(priceMin));
+  }
+  if (priceMax) {
+    filteredProducts = filteredProducts.filter(p => Number(p.price) <= Number(priceMax));
+  }
+
+  // Apply Sorting
+  filteredProducts.sort((a, b) => {
+    if (sortBy === 'price_asc') return Number(a.price) - Number(b.price);
+    if (sortBy === 'price_desc') return Number(b.price) - Number(a.price);
+    // default date_desc (assuming newer items have higher IDs or createdAt, but we can fallback to ID string comparison or leave as is if already sorted)
+    return 0; 
+  });
 
   return (
     <section className="products">
@@ -54,6 +74,63 @@ export default function ProductGrid({ title, products, subsections = [], emptyMe
           ))}
         </div>
       )}
+
+      {/* Filter Toggle Button & Filter Panel */}
+      <div style={{ padding: '0 5%', marginBottom: '2rem' }}>
+        <button 
+          onClick={() => setShowFilters(!showFilters)}
+          style={{ background: 'transparent', border: '1px solid var(--border-color)', padding: '0.5rem 1rem', borderRadius: '8px', cursor: 'pointer', color: 'var(--text-primary)', fontWeight: 'bold', display: 'flex', alignItems: 'center', gap: '0.5rem' }}
+        >
+          <i className="fa-solid fa-sliders"></i> {t('filters') || 'تصفية وترتيب'}
+        </button>
+
+        {showFilters && (
+          <div style={{ marginTop: '1rem', padding: '1.5rem', background: 'var(--surface-color)', border: '1px solid var(--glass-border)', borderRadius: '12px', display: 'flex', gap: '2rem', flexWrap: 'wrap', alignItems: 'flex-end' }}>
+            
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
+              <label style={{ fontSize: '0.9rem', fontWeight: 'bold', color: 'var(--text-secondary)' }}>الحد الأدنى للسعر (₪)</label>
+              <input 
+                type="number" 
+                value={priceMin} 
+                onChange={(e) => setPriceMin(e.target.value)}
+                placeholder="0"
+                style={{ padding: '0.6rem', borderRadius: '8px', border: '1px solid var(--border-color)', background: 'var(--bg-color)', width: '120px', color: 'var(--text-primary)' }}
+              />
+            </div>
+
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
+              <label style={{ fontSize: '0.9rem', fontWeight: 'bold', color: 'var(--text-secondary)' }}>الحد الأقصى للسعر (₪)</label>
+              <input 
+                type="number" 
+                value={priceMax} 
+                onChange={(e) => setPriceMax(e.target.value)}
+                placeholder="1000"
+                style={{ padding: '0.6rem', borderRadius: '8px', border: '1px solid var(--border-color)', background: 'var(--bg-color)', width: '120px', color: 'var(--text-primary)' }}
+              />
+            </div>
+
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
+              <label style={{ fontSize: '0.9rem', fontWeight: 'bold', color: 'var(--text-secondary)' }}>ترتيب حسب</label>
+              <select 
+                value={sortBy} 
+                onChange={(e) => setSortBy(e.target.value)}
+                style={{ padding: '0.6rem', borderRadius: '8px', border: '1px solid var(--border-color)', background: 'var(--bg-color)', color: 'var(--text-primary)', minWidth: '150px' }}
+              >
+                <option value="date_desc">الأحدث</option>
+                <option value="price_asc">السعر: من الأقل للأعلى</option>
+                <option value="price_desc">السعر: من الأعلى للأقل</option>
+              </select>
+            </div>
+
+            <button 
+              onClick={() => { setPriceMin(''); setPriceMax(''); setSortBy('date_desc'); }}
+              style={{ background: 'transparent', border: 'none', color: '#e74c3c', cursor: 'pointer', textDecoration: 'underline', padding: '0.6rem' }}
+            >
+              إعادة ضبط
+            </button>
+          </div>
+        )}
+      </div>
       
       {!filteredProducts || filteredProducts.length === 0 ? (
         <div className="reveal" style={{ textAlign: 'center', color: 'var(--text-secondary)', padding: '2rem 0' }}>

@@ -5,14 +5,15 @@ import { useLanguage } from '@/context/LanguageContext';
 import { useState, useEffect } from 'react';
 import { useRouter, usePathname } from 'next/navigation';
 import CategorySidebar from './CategorySidebar';
+import SearchOverlay from './SearchOverlay';
 import { getSections } from '@/lib/db';
 import Image from 'next/image';
 
 export default function Navbar() {
   const { cartCount, toggleCart } = useCart();
   const { lang, setLang, t, storeSettings } = useLanguage();
-  const [searchQuery, setSearchQuery] = useState('');
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
+  const [isSearchOpen, setIsSearchOpen] = useState(false);
   const [sections, setSections] = useState([]);
   const router = useRouter();
   const pathname = usePathname();
@@ -21,13 +22,7 @@ export default function Navbar() {
     getSections().then(setSections).catch(console.error);
   }, []);
 
-  const handleSearch = (e) => {
-    e.preventDefault();
-    if (searchQuery.trim()) {
-      router.push(`/search?q=${encodeURIComponent(searchQuery)}`);
-      setSearchQuery('');
-    }
-  };
+
 
   const handleScrollToSection = (e, id) => {
     if (pathname === '/') {
@@ -89,18 +84,13 @@ export default function Navbar() {
         </nav>
 
         <div className="navbar-actions" style={{ display: 'flex', alignItems: 'center', gap: '2rem' }}>
-          <form onSubmit={handleSearch} className="search-bar hide-mobile">
-            <input 
-              type="text" 
-              placeholder={t('searchPlaceholder')} 
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              className="search-input"
-            />
-            <button type="submit" className="search-btn" style={{ fontWeight: 300 }}>
-              <i className="fa-solid fa-magnifying-glass"></i>
-            </button>
-          </form>
+          <button 
+            onClick={() => setIsSearchOpen(true)}
+            aria-label="Search" 
+            style={{ fontWeight: 300, background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-primary)', fontSize: '1.2rem' }}
+          >
+            <i className="fa-solid fa-magnifying-glass"></i>
+          </button>
 
           <div className="language-switcher" style={{ display: 'flex', gap: '10px', fontSize: '0.8rem', letterSpacing: '0.1em' }}>
               <span style={{ cursor: 'pointer', color: lang === 'en' ? 'var(--text-primary)' : 'var(--text-secondary)' }} onClick={() => setLang('en')}>EN</span>
@@ -126,6 +116,7 @@ export default function Navbar() {
         </div>
       </div>
       <CategorySidebar isOpen={isSidebarOpen} onClose={() => setIsSidebarOpen(false)} sections={sections} />
+      <SearchOverlay isOpen={isSearchOpen} onClose={() => setIsSearchOpen(false)} />
     </header>
   );
 }

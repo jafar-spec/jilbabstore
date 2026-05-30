@@ -106,8 +106,10 @@ export default function ClientProductDetail({ initialProduct, initialReviews, re
     }
   };
 
-  const averageRating = reviews.length > 0 
-    ? (reviews.reduce((acc, r) => acc + r.rating, 0) / reviews.length).toFixed(1)
+  const visibleReviews = reviews.filter(rev => !rev.isHidden);
+
+  const averageRating = visibleReviews.length > 0 
+    ? (visibleReviews.reduce((acc, r) => acc + r.rating, 0) / visibleReviews.length).toFixed(1)
     : 0;
 
   return (
@@ -207,7 +209,7 @@ export default function ClientProductDetail({ initialProduct, initialReviews, re
                 ))}
               </div>
               <span style={{ color: 'var(--text-secondary)' }}>
-                {averageRating > 0 ? `${averageRating} (${reviews.length} ${t('reviews')})` : t('noReviews')}
+                {averageRating > 0 ? `${averageRating} (${visibleReviews.length} ${t('reviews')})` : t('noReviews')}
               </span>
             </div>
           </div>
@@ -334,13 +336,13 @@ export default function ClientProductDetail({ initialProduct, initialReviews, re
           <div style={{ display: 'flex', flexWrap: 'wrap', gap: '4rem' }}>
             {/* Reviews List */}
             <div style={{ flex: '1 1 500px' }}>
-              {reviews.length === 0 ? (
+              {visibleReviews.length === 0 ? (
                 <p style={{ color: 'var(--text-secondary)', fontStyle: 'italic' }}>
                   {t('beFirstToReview')}
                 </p>
               ) : (
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
-                  {reviews.map((rev, i) => (
+                  {visibleReviews.map((rev, i) => (
                     <div key={i} style={{ padding: '1.5rem', background: 'var(--bg-color)', borderRadius: '12px', border: '1px solid var(--border-color)' }}>
                       <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '0.5rem' }}>
                         <strong style={{ fontSize: '1.1rem' }}>{rev.name}</strong>

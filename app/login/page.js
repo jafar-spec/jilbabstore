@@ -3,23 +3,31 @@ import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 
+import { useAuth } from '@/context/AuthContext';
+
 export default function LoginPage() {
+  const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
+  const [loading, setLoading] = useState(false);
   const router = useRouter();
+  const { login } = useAuth();
 
-  const handleLogin = (e) => {
+  const handleLogin = async (e) => {
     e.preventDefault();
-    if (password === 'admin123') {
-      sessionStorage.setItem('store_auth_role', 'operator');
+    setLoading(true);
+    setError('');
+    try {
+      await login(email, password);
       router.push('/admin');
-    } else if (password === 'courier123') {
-      sessionStorage.setItem('store_auth_role', 'courier');
-      router.push('/admin');
-    } else {
-      setError('كلمة المرور غير صحيحة');
+    } catch (err) {
+      console.error(err);
+      setError('البريد الإلكتروني أو كلمة المرور غير صحيحة');
+    } finally {
+      setLoading(false);
     }
   };
+
 
   return (
     <div style={{ display: 'flex', minHeight: '100vh', alignItems: 'center', justifyContent: 'center', background: 'var(--bg-color)' }}>
@@ -32,17 +40,31 @@ export default function LoginPage() {
         <form onSubmit={handleLogin} style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
           <div>
             <input 
+              type="email" 
+              placeholder="البريد الإلكتروني" 
+              value={email}
+              onChange={(e) => { setEmail(e.target.value); setError(''); }}
+              style={{ width: '100%', padding: '1rem', borderRadius: '8px', border: '1px solid var(--glass-border)', background: 'var(--bg-color)', color: 'var(--text-primary)', outline: 'none' }}
+              dir="ltr"
+              required
+            />
+          </div>
+          <div>
+            <input 
               type="password" 
               placeholder="كلمة المرور" 
               value={password}
               onChange={(e) => { setPassword(e.target.value); setError(''); }}
               style={{ width: '100%', padding: '1rem', borderRadius: '8px', border: '1px solid var(--glass-border)', background: 'var(--bg-color)', color: 'var(--text-primary)', outline: 'none' }}
               dir="ltr"
+              required
             />
             {error && <p style={{ color: '#e74c3c', marginTop: '0.5rem', fontSize: '0.9rem' }}>{error}</p>}
           </div>
           
-          <button type="submit" className="btn-primary" style={{ width: '100%' }}>تسجيل الدخول</button>
+          <button type="submit" className="btn-primary" style={{ width: '100%' }} disabled={loading}>
+            {loading ? 'جاري تسجيل الدخول...' : 'تسجيل الدخول'}
+          </button>
         </form>
 
         <div style={{ marginTop: '2rem', textAlign: 'center' }}>

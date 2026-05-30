@@ -14,9 +14,11 @@ import {
   getSections, createSection, deleteSectionDoc, getNewsletterSubscribers,
   getStoreSettings, updateStoreSettings,
   getAllPromoCodes, addPromoCode, deletePromoCode,
-  getAllTickets, updateTicket, deleteTicket, updateSectionSubsections
+  getAllTickets, updateTicket, deleteTicket, updateSectionSubsections,
+  updateOrderRouteSequence, getAllReviews, updateReview, deleteReview
 } from '@/lib/db';
 import AdminMap from '@/components/AdminMap';
+import { useAuth } from '@/context/AuthContext';
 
 // Helper function to compress images before saving as Base64 to avoid huge payloads
 const compressImage = (file, maxWidth = 800, maxHeight = 800) => {
@@ -58,6 +60,7 @@ const compressImage = (file, maxWidth = 800, maxHeight = 800) => {
 export default function AdminDashboard() {
   const router = useRouter();
   const { showToast } = useToast();
+  const { user, role: authRole, loading: authLoading, logout } = useAuth();
   const [role, setRole] = useState(null); // 'operator' or 'courier'
   const [courierTab, setCourierTab] = useState('to_deliver'); // 'to_deliver' or 'delivered'
   const [activeTab, setActiveTab] = useState('loading'); 
@@ -88,6 +91,14 @@ export default function AdminDashboard() {
   // SUPPORT TICKETS STATE
   const [tickets, setTickets] = useState([]);
   const [selectedTicket, setSelectedTicket] = useState(null);
+
+  // REVIEWS STATE
+  const [adminReviews, setAdminReviews] = useState([]);
+  const [selectedReview, setSelectedReview] = useState(null);
+
+  // COURIER ROUTING STATE
+  const [courierRouteMode, setCourierRouteMode] = useState(false);
+  const [routeOrders, setRouteOrders] = useState([]);
 
   // CMS STATE
   const [cmsSettings, setCmsSettings] = useState({
@@ -127,27 +138,30 @@ export default function AdminDashboard() {
   const availableSizes = ['XS', 'S', 'M', 'L', 'XL', 'XXL', '3XL', 'One Size'];
 
   useEffect(() => {
-    const authRole = sessionStorage.getItem('store_auth_role');
-    if (!authRole) {
-      router.push('/login');
-    } else {
-      setRole(authRole);
-      setActiveTab(authRole === 'operator' ? 'dashboard' : 'delivery');
-      fetchData();
+    if (!authLoading) {
+      if (!user) {
+        router.push('/login');
+      } else {
+        const r = authRole || 'operator';
+        setRole(r);
+        setActiveTab(r === 'operator' ? 'dashboard' : 'delivery');
+        fetchData();
+      }
     }
-  }, [router]);
+  }, [user, authLoading, authRole, router]);
 
   const fetchData = async () => {
     setLoading(true);
     try {
-      const [fetchedOrders, fetchedProducts, fetchedSections, fetchedSubscribers, fetchedSettings, fetchedPromoCodes, fetchedTickets] = await Promise.all([
+      const [fetchedOrders, fetchedProducts, fetchedSections, fetchedSubscribers, fetchedSettings, fetchedPromoCodes, fetchedTickets, fetchedReviews] = await Promise.all([
         getAllOrders(),
         getProducts(),
         getSections(),
         getNewsletterSubscribers(),
         getStoreSettings(),
         getAllPromoCodes(),
-        getAllTickets()
+        getAllTickets(),
+        getAllReviews()
       ]);
       setOrders(fetchedOrders);
       setProducts(fetchedProducts);
@@ -155,6 +169,7 @@ export default function AdminDashboard() {
       setSubscribers(fetchedSubscribers);
       setPromoCodes(fetchedPromoCodes || []);
       setTickets(fetchedTickets || []);
+      setAdminReviews(fetchedReviews || []);
       
       if (fetchedSettings) {
         setCmsSettings(fetchedSettings);
@@ -227,6 +242,50 @@ export default function AdminDashboard() {
     }
   };
 
+  // --- COURIER ROUTING LOGIC ---
+  const handleDragStart = (e, index) => {
+    e.dataTransfer.setData('dragIndex', index);
+  };
+
+  const handleDrop = (e, dropIndex) => {
+    const dragIndex = parseInt(e.dataTransfer.getData('dragIndex'), 10);
+    if (dragIndex === dropIndex) return;
+
+    const updatedRoutes = [...routeOrders];
+    const [draggedItem] = updatedRoutes.splice(dragIndex, 1);
+    updatedRoutes.splice(dropIndex, 0, draggedItem);
+    
+    setRouteOrders(updatedRoutes);
+  };
+
+  const handleDragOver = (e) => {
+    e.preventDefault(); // necessary to allow dropping
+  };
+
+  const saveCourierRoute = async () => {
+    try {
+      const updates = routeOrders.map((o, idx) => ({ id: o.id, routeOrder: idx }));
+      await updateOrderRouteSequence(updates);
+      setOrders(orders.map(o => {
+        const update = updates.find(u => u.id === o.id);
+        return update ? { ...o, routeOrder: update.routeOrder } : o;
+      }));
+      showToast('تم حفظ خط التوزيع بنجاح', 'success');
+      setCourierRouteMode(false);
+    } catch (err) {
+      showToast('فشل حفظ خط التوزيع', 'error');
+    }
+  };
+
+  const toggleCourierRouteMode = () => {
+    if (!courierRouteMode) {
+      // Initialize routeOrders with current out for delivery orders sorted by existing routeOrder or fallback to date
+      const toDeliver = orders.filter(o => o.status === 'جاري التوصيل');
+      toDeliver.sort((a, b) => (a.routeOrder || 0) - (b.routeOrder || 0));
+      setRouteOrders(toDeliver);
+    }
+    setCourierRouteMode(!courierRouteMode);
+  };
   // --- PRODUCTS LOGIC ---
   const handleImageUpload = async (e) => {
     const files = Array.from(e.target.files);
@@ -359,9 +418,57 @@ export default function AdminDashboard() {
   const updateOrderStatus = async (orderId, newStatus) => {
     try {
       await updateOrderDoc(orderId, { status: newStatus });
+      const currentOrder = orders.find(o => o.id === orderId);
       setOrders(orders.map(order => 
         order.id === orderId ? { ...order, status: newStatus } : order
       ));
+      showToast(`تم تحديث الحالة إلى: ${newStatus}`, 'success');
+
+      // Send email if applicable
+      const customerEmail = currentOrder?.shipping?.email || currentOrder?.customerInfo?.email;
+      if (customerEmail && (newStatus === 'جاري التوصيل' || newStatus === 'تم التوصيل')) {
+        let subject = '';
+        let htmlContent = '';
+        const orderNum = orderId.slice(0, 8);
+        
+        if (newStatus === 'جاري التوصيل') {
+          subject = `Your Order #${orderNum} is Out for Delivery!`;
+          htmlContent = `<div style="font-family:sans-serif; text-align:center; padding:20px;">
+            <h2 style="color:#7c3aed;">Great news!</h2>
+            <p>Your Jilbab Store order <strong>#${orderNum}</strong> is out for delivery with our courier.</p>
+            <p>Please keep your phone available. We will contact you soon!</p>
+          </div>`;
+        } else if (newStatus === 'تم التوصيل') {
+          subject = `Your Order #${orderNum} has been Delivered!`;
+          htmlContent = `<div style="font-family:sans-serif; text-align:center; padding:20px;">
+            <h2 style="color:#27ae60;">Delivered!</h2>
+            <p>Your Jilbab Store order <strong>#${orderNum}</strong> has been successfully delivered.</p>
+            <p>Thank you for shopping with us! We hope you love your purchase.</p>
+          </div>`;
+        }
+
+        try {
+          // get current auth token
+          const { auth } = await import('@/lib/firebase');
+          const token = await auth.currentUser?.getIdToken();
+
+          await fetch('/api/send-email', {
+            method: 'POST',
+            headers: { 
+              'Content-Type': 'application/json',
+              'Authorization': `Bearer ${token}` 
+            },
+            body: JSON.stringify({
+              to: customerEmail,
+              subject,
+              html: htmlContent
+            })
+          });
+        } catch (emailErr) {
+          console.error("Failed to send email notification", emailErr);
+        }
+      }
+
     } catch (err) {
       showToast("فشل تحديث حالة الطلب", "error");
     }
@@ -734,6 +841,9 @@ export default function AdminDashboard() {
               <button onClick={() => setActiveTab('tickets')} style={navButtonStyle(activeTab === 'tickets')}>
                 <i className="fa-solid fa-headset" style={{ marginLeft: '10px' }}></i> تذاكر الدعم
                 {/* Show unread count badge if needed */}
+              </button>
+              <button onClick={() => setActiveTab('reviews')} style={navButtonStyle(activeTab === 'reviews')}>
+                <i className="fa-solid fa-star" style={{ marginLeft: '10px' }}></i> التقييمات
               </button>
               <button onClick={() => setActiveTab('customers')} style={navButtonStyle(activeTab === 'customers')}>
                 <i className="fa-solid fa-users" style={{ marginLeft: '10px' }}></i> قاعدة العملاء والمشتريات
@@ -1418,39 +1528,80 @@ export default function AdminDashboard() {
             {/* ORDERS AND DELIVERY TABS REMAIN SIMILAR (Collapsed for brevity but functional) */}
             {activeTab === 'orders' && role === 'operator' && (
               <div style={{ background: 'var(--surface-color)', padding: '2rem', borderRadius: '16px', border: '1px solid var(--glass-border)', overflowX: 'auto' }}>
-                {orders.length === 0 ? <EmptyState icon="fa-box-open" text="لا توجد طلبات حتى الآن." /> : (
-                  <table style={{ width: '100%', borderCollapse: 'collapse', minWidth: '800px' }}>
-                    <thead>
-                      <tr style={{ borderBottom: '1px solid var(--glass-border)', textAlign: 'right', color: 'var(--text-secondary)' }}>
-                        <th style={{ padding: '1rem' }}>رقم الطلب</th>
-                        <th style={{ padding: '1rem' }}>العميل</th>
-                        <th style={{ padding: '1rem' }}>الإجمالي</th>
-                        <th style={{ padding: '1rem' }}>الحالة</th>
-                        <th style={{ padding: '1rem' }}>التفاصيل</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {orders.map(order => (
-                        <tr key={order.id} style={{ borderBottom: '1px solid var(--glass-border)' }}>
-                          <td style={{ padding: '1rem' }}><strong>{order.id}</strong></td>
-                          <td style={{ padding: '1rem' }}>{order.shipping?.fullName || order.customerInfo?.fullName || 'غير متوفر'}</td>
-                          <td style={{ padding: '1rem', color: 'var(--accent-color)', fontWeight: 'bold' }}>₪{order.total?.toFixed(2)}</td>
-                          <td style={{ padding: '1rem' }}>
-                            <select value={order.status} onChange={(e) => updateOrderStatus(order.id, e.target.value)} style={{ padding: '0.5rem', borderRadius: '4px', border: '1px solid var(--glass-border)' }}>
-                              <option value="قيد المعالجة (مدفوع)">قيد المعالجة (مدفوع)</option>
-                              <option value="قيد المعالجة">قيد المعالجة</option>
-                              <option value="جاري التوصيل">جاري التوصيل</option>
-                              <option value="تم التوصيل">تم التوصيل</option>
-                              <option value="ملغي">ملغي</option>
-                            </select>
-                          </td>
-                          <td style={{ padding: '1rem' }}>
-                            <button onClick={() => setSelectedOrder(order)} className="btn-details"><i className="fa-solid fa-eye"></i> عرض</button>
-                          </td>
+                
+                <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '1.5rem', alignItems: 'center' }}>
+                  <h3 style={{ margin: 0 }}>إدارة الطلبات</h3>
+                  <button onClick={toggleCourierRouteMode} className={courierRouteMode ? 'btn-primary' : ''} style={{ padding: '0.8rem 1.5rem', borderRadius: '8px', cursor: 'pointer', border: '1px solid var(--accent-color)', background: courierRouteMode ? 'var(--accent-color)' : 'transparent', color: courierRouteMode ? '#fff' : 'var(--text-primary)', fontWeight: 'bold' }}>
+                    <i className="fa-solid fa-route"></i> توجيه المندوب (Courier Routing)
+                  </button>
+                </div>
+
+                {courierRouteMode ? (
+                  <div>
+                    <div style={{ background: 'rgba(124, 58, 237, 0.1)', border: '1px solid var(--accent-color)', borderRadius: '8px', padding: '1rem', marginBottom: '1.5rem', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                      <span><i className="fa-solid fa-info-circle"></i> اسحب وأفلت الطلبات لترتيب مسار التوصيل للمندوب.</span>
+                      <button onClick={saveCourierRoute} style={{ padding: '0.6rem 1.2rem', background: '#27ae60', color: '#fff', border: 'none', borderRadius: '6px', fontWeight: 'bold', cursor: 'pointer' }}>حفظ المسار</button>
+                    </div>
+                    {routeOrders.length === 0 ? <EmptyState icon="fa-truck" text="لا توجد طلبات جاري توصيلها حالياً." /> : (
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: '0.8rem' }}>
+                        {routeOrders.map((order, index) => {
+                          const addr = order.shipping || order.customerInfo || {};
+                          return (
+                            <div 
+                              key={order.id}
+                              draggable
+                              onDragStart={(e) => handleDragStart(e, index)}
+                              onDragOver={handleDragOver}
+                              onDrop={(e) => handleDrop(e, index)}
+                              style={{ display: 'flex', alignItems: 'center', gap: '1rem', padding: '1rem', background: 'var(--bg-color)', border: '1px solid var(--glass-border)', borderRadius: '8px', cursor: 'grab', boxShadow: '0 2px 8px rgba(0,0,0,0.05)' }}
+                            >
+                              <div style={{ fontWeight: 'bold', fontSize: '1.2rem', color: 'var(--text-secondary)', width: '30px', textAlign: 'center' }}>{index + 1}</div>
+                              <i className="fa-solid fa-grip-vertical" style={{ color: '#ccc', cursor: 'grab' }}></i>
+                              <div style={{ flex: 1 }}>
+                                <div style={{ fontWeight: 'bold' }}>#{order.id.slice(0, 8)} - {addr.fullName || 'غير متوفر'}</div>
+                                <div style={{ fontSize: '0.9rem', color: 'var(--text-secondary)' }}>{addr.city || ''} {addr.neighborhood || ''} {addr.street || ''}</div>
+                              </div>
+                            </div>
+                          )
+                        })}
+                      </div>
+                    )}
+                  </div>
+                ) : (
+                  orders.length === 0 ? <EmptyState icon="fa-box-open" text="لا توجد طلبات حتى الآن." /> : (
+                    <table style={{ width: '100%', borderCollapse: 'collapse', minWidth: '800px' }}>
+                      <thead>
+                        <tr style={{ borderBottom: '1px solid var(--glass-border)', textAlign: 'right', color: 'var(--text-secondary)' }}>
+                          <th style={{ padding: '1rem' }}>رقم الطلب</th>
+                          <th style={{ padding: '1rem' }}>العميل</th>
+                          <th style={{ padding: '1rem' }}>الإجمالي</th>
+                          <th style={{ padding: '1rem' }}>الحالة</th>
+                          <th style={{ padding: '1rem' }}>التفاصيل</th>
                         </tr>
-                      ))}
-                    </tbody>
-                  </table>
+                      </thead>
+                      <tbody>
+                        {orders.map(order => (
+                          <tr key={order.id} style={{ borderBottom: '1px solid var(--glass-border)' }}>
+                            <td style={{ padding: '1rem' }}><strong>{order.id}</strong></td>
+                            <td style={{ padding: '1rem' }}>{order.shipping?.fullName || order.customerInfo?.fullName || 'غير متوفر'}</td>
+                            <td style={{ padding: '1rem', color: 'var(--accent-color)', fontWeight: 'bold' }}>₪{order.total?.toFixed(2)}</td>
+                            <td style={{ padding: '1rem' }}>
+                              <select value={order.status} onChange={(e) => updateOrderStatus(order.id, e.target.value)} style={{ padding: '0.5rem', borderRadius: '4px', border: '1px solid var(--glass-border)' }}>
+                                <option value="قيد المعالجة (مدفوع)">قيد المعالجة (مدفوع)</option>
+                                <option value="قيد المعالجة">قيد المعالجة</option>
+                                <option value="جاري التوصيل">جاري التوصيل</option>
+                                <option value="تم التوصيل">تم التوصيل</option>
+                                <option value="ملغي">ملغي</option>
+                              </select>
+                            </td>
+                            <td style={{ padding: '1rem' }}>
+                              <button onClick={() => setSelectedOrder(order)} className="btn-details"><i className="fa-solid fa-eye"></i> عرض</button>
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  )
                 )}
               </div>
             )}
@@ -1752,6 +1903,7 @@ export default function AdminDashboard() {
                 <div style={{ display: 'grid', gap: '1.5rem', gridTemplateColumns: 'repeat(auto-fill, minmax(320px, 1fr))' }}>
                   {orders
                     .filter(o => courierTab === 'to_deliver' ? o.status === 'جاري التوصيل' : o.status === 'تم التوصيل')
+                    .sort((a, b) => (a.routeOrder || 0) - (b.routeOrder || 0))
                     .map(order => {
                       const addr = order.shipping || order.customerInfo || {};
                       const fullAddress = `${addr.city || ''} ${addr.neighborhood || ''} ${addr.street || ''}`;
@@ -1995,6 +2147,91 @@ export default function AdminDashboard() {
                         )}
                       </div>
                     ))}
+                  </div>
+                )}
+              </div>
+            )}
+
+            {/* REVIEWS TAB */}
+            {activeTab === 'reviews' && role === 'operator' && (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                  <h3 style={{ color: 'var(--text-primary)', margin: 0 }}>
+                    <i className="fa-solid fa-star"></i> إدارة التقييمات
+                  </h3>
+                  <span style={{ background: 'var(--accent-color)', color: '#fff', borderRadius: '99px', padding: '4px 12px', fontSize: '0.8rem', fontWeight: 700 }}>
+                    {adminReviews.filter(r => !r.isHidden).length} نشط
+                  </span>
+                </div>
+
+                {adminReviews.length === 0 ? (
+                  <div style={{ textAlign: 'center', padding: '4rem', color: 'var(--text-secondary)', background: 'var(--surface-color)', borderRadius: '16px', border: '1px solid var(--glass-border)' }}>
+                    <i className="fa-solid fa-star-half-stroke" style={{ fontSize: '3rem', opacity: 0.3, display: 'block', marginBottom: '1rem' }}></i>
+                    لا توجد تقييمات بعد
+                  </div>
+                ) : (
+                  <div style={{ background: 'var(--surface-color)', borderRadius: '16px', border: '1px solid var(--glass-border)', overflowX: 'auto' }}>
+                    <table style={{ width: '100%', borderCollapse: 'collapse', minWidth: '800px' }}>
+                      <thead>
+                        <tr style={{ borderBottom: '1px solid var(--glass-border)', textAlign: 'right', color: 'var(--text-secondary)' }}>
+                          <th style={{ padding: '1rem' }}>المنتج</th>
+                          <th style={{ padding: '1rem' }}>المستخدم</th>
+                          <th style={{ padding: '1rem' }}>التقييم</th>
+                          <th style={{ padding: '1rem' }}>التعليق</th>
+                          <th style={{ padding: '1rem' }}>الحالة</th>
+                          <th style={{ padding: '1rem' }}>إجراءات</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {adminReviews.map(review => {
+                          const prod = products.find(p => p.id === review.productId);
+                          return (
+                            <tr key={review.id} style={{ borderBottom: '1px solid var(--glass-border)', opacity: review.isHidden ? 0.6 : 1 }}>
+                              <td style={{ padding: '1rem', fontWeight: 'bold' }}>{prod ? prod.title : review.productId}</td>
+                              <td style={{ padding: '1rem' }}>{review.userName}</td>
+                              <td style={{ padding: '1rem', color: '#f1c40f' }}>
+                                {[...Array(5)].map((_, i) => (
+                                  <i key={i} className={`fa-solid fa-star`} style={{ color: i < review.rating ? '#f1c40f' : '#e0e0e0', fontSize: '0.9rem' }}></i>
+                                ))}
+                              </td>
+                              <td style={{ padding: '1rem', maxWidth: '300px', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }} title={review.comment}>
+                                {review.comment}
+                              </td>
+                              <td style={{ padding: '1rem' }}>
+                                <span style={{ padding: '4px 8px', borderRadius: '4px', fontSize: '0.8rem', background: review.isHidden ? '#fdecea' : '#eafaf1', color: review.isHidden ? '#e74c3c' : '#27ae60' }}>
+                                  {review.isHidden ? 'مخفي' : 'ظاهر'}
+                                </span>
+                              </td>
+                              <td style={{ padding: '1rem', display: 'flex', gap: '8px' }}>
+                                <button
+                                  onClick={async () => {
+                                    const newHidden = !review.isHidden;
+                                    await updateReview(review.id, { isHidden: newHidden });
+                                    setAdminReviews(prev => prev.map(r => r.id === review.id ? { ...r, isHidden: newHidden } : r));
+                                    showToast(newHidden ? 'تم إخفاء التقييم' : 'تم إظهار التقييم', 'success');
+                                  }}
+                                  className="btn-details" style={{ flex: 1 }}
+                                >
+                                  {review.isHidden ? <i className="fa-solid fa-eye"></i> : <i className="fa-solid fa-eye-slash"></i>}
+                                </button>
+                                <button
+                                  onClick={async () => {
+                                    if(confirm('هل أنت متأكد من حذف هذا التقييم؟')) {
+                                      await deleteReview(review.id);
+                                      setAdminReviews(prev => prev.filter(r => r.id !== review.id));
+                                      showToast('تم حذف التقييم', 'success');
+                                    }
+                                  }}
+                                  style={{ padding: '0.5rem', borderRadius: '4px', border: '1px solid #e74c3c', background: 'transparent', color: '#e74c3c', cursor: 'pointer' }}
+                                >
+                                  <i className="fa-solid fa-trash"></i>
+                                </button>
+                              </td>
+                            </tr>
+                          );
+                        })}
+                      </tbody>
+                    </table>
                   </div>
                 )}
               </div>
