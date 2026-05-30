@@ -125,7 +125,8 @@ export default {
   checkoutError: "אירעה שגיאה במהלך התשלום",
 
   // Navigation
-  trackOrder: "מעקב הזמנות",
+  trackOrder: "מעקב אחר ההזמנה",
+  customerService: "שירות לקוחות",
   wishlist: "מועדפים",
   profile: "החשבון שלי",
 

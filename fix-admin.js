@@ -29,16 +29,25 @@ async function fixAdmin() {
     }
 
     // 2. Assign the correct admin
+    let correctUser;
     try {
-      const correctUser = await auth.getUserByEmail('jafar.01.salama@gmail.com');
-      await db.collection('admins').doc(correctUser.uid).set({
-        role: 'operator',
-        email: correctUser.email
-      }, { merge: true });
-      console.log(`Successfully assigned operator role to ${correctUser.email}`);
+      correctUser = await auth.getUserByEmail('jafar.01.salama@gmail.com');
+      await auth.updateUser(correctUser.uid, { emailVerified: true });
+      console.log("Forcibly verified email for existing user.");
     } catch (e) {
-      console.error("Could not find jafar.01.salama@gmail.com in Firebase Auth. Make sure you created the account!");
+      console.log("User not found, creating jafar.01.salama@gmail.com with password 'admin123'...");
+      correctUser = await auth.createUser({
+        email: 'jafar.01.salama@gmail.com',
+        password: 'admin123',
+        emailVerified: true
+      });
     }
+
+    await db.collection('admins').doc(correctUser.uid).set({
+      role: 'operator',
+      email: correctUser.email
+    }, { merge: true });
+    console.log(`Successfully assigned operator role to ${correctUser.email}`);
   } catch (error) {
     console.error("Error fixing admin:", error);
   }

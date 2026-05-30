@@ -125,8 +125,9 @@ export default {
   checkoutError: "حدث خطأ أثناء إتمام الطلب",
 
   // Navigation
-  trackOrder: "تتبع الطلب",
-  wishlist: "المفضلة",
+  trackOrder: 'تتبع طلبي',
+  customerService: 'خدمة العملاء',
+  wishlist: 'المفضلة',
   profile: "حسابي",
 
   // Wishlist

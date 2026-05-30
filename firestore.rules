@@ -36,10 +36,12 @@ service cloud.firestore {
     }
 
     // Orders
-    // Anyone can create an order. Only admins can read, update, or delete.
+    // Anyone can create an order. Only admins can read all, update, or delete.
+    // Customers can read their own orders if they are logged in.
     match /orders/{document=**} {
       allow create: if true;
-      allow read, update, delete: if isAdmin();
+      allow read: if isAdmin() || (request.auth != null && resource.data.uid == request.auth.uid);
+      allow update, delete: if isAdmin();
     }
 
     // Reviews

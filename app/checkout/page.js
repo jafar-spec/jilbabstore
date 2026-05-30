@@ -156,6 +156,7 @@ export default function Checkout() {
 
       const newOrder = {
         date: new Date().toISOString(),
+        uid: user ? user.uid : null, // Link order to customer if logged in
         customerInfo: { ...formData, email: user ? user.email : formData.email || '' },
         items: sanitizedCart,
         subtotal: Number(cartTotal) || 0,

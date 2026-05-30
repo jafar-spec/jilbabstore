@@ -126,6 +126,7 @@ export default {
 
   // Navigation
   trackOrder: "Track Order",
+  customerService: "Customer Service",
   wishlist: "Wishlist",
   profile: "Profile",
 
