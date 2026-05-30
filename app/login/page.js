@@ -70,12 +70,11 @@ export default function LoginPage() {
     setError('');
     
     try {
-      if (!window.recaptchaVerifier) {
-        window.recaptchaVerifier = new RecaptchaVerifier(auth, `recaptcha-${recaptchaKey}`, {
-          'size': 'invisible'
-        });
-      }
-      const appVerifier = window.recaptchaVerifier;
+      // Create a brand new verifier locally every time
+      const appVerifier = new RecaptchaVerifier(auth, `recaptcha-${recaptchaKey}`, {
+        'size': 'invisible'
+      });
+      
       const result = await signInWithPhoneNumber(auth, finalPhone, appVerifier);
       setConfirmationResult(result);
       setShowOtpInput(true);
@@ -83,10 +82,6 @@ export default function LoginPage() {
     } catch (err) {
       if (err.message && err.message.includes('reCAPTCHA client element has been removed')) {
         console.log('Recaptcha element removed, recreating and retrying...');
-        if (window.recaptchaVerifier) {
-          try { window.recaptchaVerifier.clear(); } catch(e){}
-          window.recaptchaVerifier = null;
-        }
         // Force React to recreate the DOM node
         setRecaptchaKey(prev => prev + 1);
         setError('جاري إعادة التهيئة، يرجى النقر على إرسال مرة أخرى.');
@@ -96,12 +91,7 @@ export default function LoginPage() {
 
       console.error(err);
       setError(`حدث خطأ: ${err.message}`);
-      // Clear recaptcha on error to fix 'client element has been removed' issues
-      if (window.recaptchaVerifier) {
-        try { window.recaptchaVerifier.clear(); } catch(e){}
-        window.recaptchaVerifier = null;
-        setRecaptchaKey(prev => prev + 1);
-      }
+      setRecaptchaKey(prev => prev + 1); // Refresh node on any error
     } finally {
       setLoading(false);
     }
