@@ -50,13 +50,7 @@ export default function ProfilePage() {
     return () => unsubscribe();
   }, []);
 
-  useEffect(() => {
-    if (!user && !loading && authMethod === 'phone' && !window.recaptchaVerifier) {
-      window.recaptchaVerifier = new RecaptchaVerifier(auth, 'recaptcha-container-profile', {
-        'size': 'invisible'
-      });
-    }
-  }, [user, loading, authMethod]);
+  // Recaptcha initialization is now handled dynamically on submit
 
   const handleEmailAuth = async (e) => {
     e.preventDefault();
@@ -97,6 +91,11 @@ export default function ProfilePage() {
     setError('');
     
     try {
+      if (!window.recaptchaVerifier) {
+        window.recaptchaVerifier = new RecaptchaVerifier(auth, 'recaptcha-container-profile', {
+          'size': 'invisible'
+        });
+      }
       const appVerifier = window.recaptchaVerifier;
       const result = await signInWithPhoneNumber(auth, finalPhone, appVerifier);
       setConfirmationResult(result);
@@ -105,7 +104,10 @@ export default function ProfilePage() {
     } catch (err) {
       console.error(err);
       setError(`حدث خطأ: ${err.message}`);
-      if (window.recaptchaVerifier) window.recaptchaVerifier.render().then(wId => window.recaptchaVerifier.reset(wId));
+      if (window.recaptchaVerifier) {
+        try { window.recaptchaVerifier.clear(); } catch(e){}
+        window.recaptchaVerifier = null;
+      }
     } finally {
       setLoading(false);
     }

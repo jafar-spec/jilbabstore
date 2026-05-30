@@ -1,5 +1,5 @@
 "use client";
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 
@@ -28,17 +28,7 @@ export default function LoginPage() {
   const router = useRouter();
   const { login } = useAuth();
 
-  useEffect(() => {
-    // Initialize Recaptcha
-    if (!window.recaptchaVerifier) {
-      window.recaptchaVerifier = new RecaptchaVerifier(auth, 'recaptcha-container', {
-        'size': 'invisible',
-        'callback': (response) => {
-          // reCAPTCHA solved
-        }
-      });
-    }
-  }, []);
+  // Recaptcha initialization is now handled dynamically on submit
 
   const handleEmailLogin = async (e) => {
     e.preventDefault();
@@ -79,6 +69,11 @@ export default function LoginPage() {
     setError('');
     
     try {
+      if (!window.recaptchaVerifier) {
+        window.recaptchaVerifier = new RecaptchaVerifier(auth, 'recaptcha-container', {
+          'size': 'invisible'
+        });
+      }
       const appVerifier = window.recaptchaVerifier;
       const result = await signInWithPhoneNumber(auth, finalPhone, appVerifier);
       setConfirmationResult(result);
@@ -87,8 +82,11 @@ export default function LoginPage() {
     } catch (err) {
       console.error(err);
       setError(`حدث خطأ: ${err.message}`);
-      // Reset recaptcha on error
-      if (window.recaptchaVerifier) window.recaptchaVerifier.render().then(wId => window.recaptchaVerifier.reset(wId));
+      // Clear recaptcha on error to fix 'client element has been removed' issues
+      if (window.recaptchaVerifier) {
+        try { window.recaptchaVerifier.clear(); } catch(e){}
+        window.recaptchaVerifier = null;
+      }
     } finally {
       setLoading(false);
     }
