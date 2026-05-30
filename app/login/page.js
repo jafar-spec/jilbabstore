@@ -71,7 +71,7 @@ export default function LoginPage() {
     
     try {
       if (!window.recaptchaVerifier) {
-        window.recaptchaVerifier = new RecaptchaVerifier(auth, 'recaptcha-container', {
+        window.recaptchaVerifier = new RecaptchaVerifier(auth, `recaptcha-${recaptchaKey}`, {
           'size': 'invisible'
         });
       }
@@ -126,7 +126,7 @@ export default function LoginPage() {
 
   return (
     <div style={{ display: 'flex', minHeight: '100vh', alignItems: 'center', justifyContent: 'center', background: 'var(--bg-color)' }}>
-      <div key={recaptchaKey} id="recaptcha-container"></div>
+      <div key={recaptchaKey} id={`recaptcha-${recaptchaKey}`}></div>
       
       <div style={{ background: 'var(--surface-color)', padding: '3rem', borderRadius: '16px', border: '1px solid var(--glass-border)', width: '100%', maxWidth: '400px', boxShadow: '0 20px 40px rgba(0,0,0,0.1)' }}>
         <div style={{ textAlign: 'center', marginBottom: '2rem' }}>

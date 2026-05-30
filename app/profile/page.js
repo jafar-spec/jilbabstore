@@ -103,7 +103,7 @@ export default function ProfilePage() {
     
     try {
       if (!window.recaptchaVerifier) {
-        window.recaptchaVerifier = new RecaptchaVerifier(auth, 'recaptcha-container-profile', {
+        window.recaptchaVerifier = new RecaptchaVerifier(auth, `recaptcha-profile-${recaptchaKey}`, {
           'size': 'invisible'
         });
       }
@@ -168,7 +168,7 @@ export default function ProfilePage() {
       <Navbar cartCount={0} />
       <div style={{ minHeight: '100vh', background: 'var(--bg-color)', paddingTop: '100px', paddingBottom: '4rem' }}>
         <div className="container" style={{ maxWidth: '800px', margin: '0 auto' }}>
-          <div key={recaptchaKey} id="recaptcha-container-profile"></div>
+          <div key={recaptchaKey} id={`recaptcha-profile-${recaptchaKey}`}></div>
           
           {!user ? (
             <div style={{ background: 'var(--surface-color)', padding: '3rem', borderRadius: '16px', border: '1px solid var(--glass-border)', boxShadow: '0 10px 30px rgba(0,0,0,0.05)' }}>
