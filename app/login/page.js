@@ -195,7 +195,7 @@ export default function LoginPage() {
                     type="tel" 
                     placeholder="رقم الهاتف (مثال: 0591234567)" 
                     value={localPhone}
-                    onChange={(e) => { setLocalPhone(e.target.value.replace(/\\D/g, '')); setError(''); }}
+                    onChange={(e) => { setLocalPhone(e.target.value.replace(/\D/g, '')); setError(''); }}
                     style={{ flex: 1, padding: '1rem', borderRadius: '8px', border: '1px solid var(--glass-border)', background: 'var(--bg-color)', color: 'var(--text-primary)', outline: 'none', letterSpacing: '1px' }}
                     dir="ltr"
                     required

@@ -139,10 +139,6 @@ export default function ProfilePage() {
     router.refresh();
   };
 
-  if (loading) {
-    return <div style={{ minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'var(--bg-color)' }}>جاري التحميل...</div>;
-  }
-
   return (
     <>
       <Navbar cartCount={0} />
@@ -222,8 +218,8 @@ export default function ProfilePage() {
                     </div>
                   )}
                   {error && <div style={{ padding: '1rem', background: '#fef2f2', color: '#dc2626', borderRadius: '8px', border: '1px solid #fecaca', fontSize: '0.9rem' }}>{error}</div>}
-                  <button type="submit" className="btn-primary" style={{ width: '100%', padding: '1rem', fontSize: '1.1rem' }}>
-                    {showOtpInput ? 'تأكيد الدخول' : 'إرسال الرمز'}
+                  <button type="submit" className="btn-primary" style={{ width: '100%', padding: '1rem', fontSize: '1.1rem', opacity: loading ? 0.7 : 1 }} disabled={loading}>
+                    {loading ? 'جاري التحميل...' : (showOtpInput ? 'تأكيد الدخول' : 'إرسال الرمز')}
                   </button>
                   {showOtpInput && (
                     <button type="button" onClick={() => { setShowOtpInput(false); setOtp(''); }} style={{ background: 'none', border: 'none', color: 'var(--text-secondary)', textDecoration: 'underline', cursor: 'pointer' }}>تغيير رقم الهاتف</button>
@@ -256,8 +252,8 @@ export default function ProfilePage() {
                   
                   {error && <div style={{ padding: '1rem', background: verificationSent ? '#f0fdf4' : '#fef2f2', color: verificationSent ? '#16a34a' : '#dc2626', borderRadius: '8px', border: `1px solid ${verificationSent ? '#bbf7d0' : '#fecaca'}`, fontSize: '0.9rem' }}>{error}</div>}
                   
-                  <button type="submit" className="btn-primary" style={{ width: '100%', padding: '1rem', fontSize: '1.1rem' }}>
-                    {isSignUp ? 'إنشاء حساب جديد' : 'تسجيل الدخول'}
+                  <button type="submit" className="btn-primary" style={{ width: '100%', padding: '1rem', fontSize: '1.1rem', opacity: loading ? 0.7 : 1 }} disabled={loading}>
+                    {loading ? 'جاري التحميل...' : (isSignUp ? 'إنشاء حساب جديد' : 'تسجيل الدخول')}
                   </button>
                   
                   <div style={{ textAlign: 'center', marginTop: '1rem' }}>
