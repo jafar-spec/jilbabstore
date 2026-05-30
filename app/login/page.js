@@ -44,7 +44,7 @@ export default function LoginPage() {
           await sendEmailVerification(user);
           setVerificationSent(true);
         }
-        setError('يرجى التحقق من بريدك الإلكتروني (تم إرسال رابط التفعيل).');
+        setError('حسابك غير مفعل بعد. يرجى مراجعة صندوق الوارد في بريدك الإلكتروني والضغط على رابط التفعيل الذي أرسلناه لك للتو.');
         setLoading(false);
         return;
       }

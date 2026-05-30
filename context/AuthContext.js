@@ -20,14 +20,35 @@ export function AuthProvider({ children }) {
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, async (user) => {
       if (user) {
+        // Enforce Email Verification for Email/Password users
+        if (user.providerData.some(p => p.providerId === 'password') && !user.emailVerified) {
+          await signOut(auth);
+          setUser(null);
+          setRole(null);
+          setLoading(false);
+          return;
+        }
+
         setUser(user);
         try {
-          const { doc, getDoc } = await import('firebase/firestore');
+          const { doc, getDoc, collection, query, where, getDocs } = await import('firebase/firestore');
           const { db } = await import('@/lib/firebase');
+          
+          // First, check by UID (Standard admins)
           const docRef = doc(db, 'admins', user.uid);
           const docSnap = await getDoc(docRef);
+          
           if (docSnap.exists()) {
             setRole(docSnap.data().role || 'operator');
+          } else if (user.phoneNumber) {
+            // Second, check by phone number (Couriers added via Admin Panel)
+            const q = query(collection(db, 'admins'), where('phone', '==', user.phoneNumber));
+            const querySnapshot = await getDocs(q);
+            if (!querySnapshot.empty) {
+              setRole(querySnapshot.docs[0].data().role || 'courier');
+            } else {
+              setRole(null);
+            }
           } else {
             setRole(null);
           }

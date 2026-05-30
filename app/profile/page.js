@@ -61,13 +61,13 @@ export default function ProfilePage() {
         const userCred = await createUserWithEmailAndPassword(auth, email, password);
         await sendEmailVerification(userCred.user);
         setVerificationSent(true);
-        setError('تم إرسال رابط التفعيل إلى بريدك الإلكتروني. يرجى التفعيل ثم تسجيل الدخول.');
+        setError('تم إنشاء حسابك بنجاح! لقد أرسلنا رابط التفعيل إلى بريدك الإلكتروني. يرجى التفعيل ثم تسجيل الدخول.');
         await signOut(auth); // Sign out until verified
       } else {
         const userCred = await signInWithEmailAndPassword(auth, email, password);
         if (!userCred.user.emailVerified) {
           await sendEmailVerification(userCred.user);
-          setError('يرجى التحقق من بريدك الإلكتروني (تم إرسال الرابط مجدداً).');
+          setError('حسابك غير مفعل بعد. يرجى مراجعة بريدك الإلكتروني والضغط على رابط التفعيل (تم إرسال الرابط مجدداً).');
           await signOut(auth);
         }
       }
