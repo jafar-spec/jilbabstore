@@ -3,13 +3,16 @@
   "version": "0.1.0",
   "private": true,
   "engines": {
-    "node": "22"
+    "node": ">=20",
+    "npm": ">=10"
   },
   "scripts": {
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "lint": "eslint"
+    "lint": "eslint",
+    "deploy": "npm run build && npx -y firebase-tools@latest deploy --only apphosting --project jilbab-store",
+    "deploy:rules": "npx -y firebase-tools@latest deploy --only firestore:rules --project jilbab-store"
   },
   "dependencies": {
     "@emailjs/browser": "^4.4.1",
