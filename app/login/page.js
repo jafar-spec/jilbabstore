@@ -4,14 +4,13 @@ import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 
 import { useAuth } from '@/context/AuthContext';
-import { sendEmailVerification } from 'firebase/auth';
 
 export default function LoginPage() {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
-  const [verificationSent, setVerificationSent] = useState(false);
+
   
   const router = useRouter();
   const { login } = useAuth();
@@ -30,17 +29,6 @@ export default function LoginPage() {
     setError('');
     try {
       const userCredential = await login(email, password);
-      const user = userCredential.user;
-      
-      if (!user.emailVerified) {
-        if (!verificationSent) {
-          await sendEmailVerification(user);
-          setVerificationSent(true);
-        }
-        setError('حسابك غير مفعل بعد. يرجى مراجعة صندوق الوارد في بريدك الإلكتروني والضغط على رابط التفعيل الذي أرسلناه لك للتو.');
-        setLoading(false);
-        return;
-      }
       
       router.push('/admin');
     } catch (err) {
@@ -81,7 +69,7 @@ export default function LoginPage() {
               required
             />
             {error && <p style={{ color: '#e74c3c', marginTop: '0.5rem', fontSize: '0.9rem', lineHeight: 1.5 }}>{error}</p>}
-            {verificationSent && <p style={{ color: '#27ae60', marginTop: '0.5rem', fontSize: '0.9rem', lineHeight: 1.5 }}>تم إرسال رابط التفعيل، يرجى التحقق من صندوق الوارد.</p>}
+
           </div>
           
           <button type="submit" className="btn-primary" style={{ width: '100%' }} disabled={loading}>

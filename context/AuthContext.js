@@ -28,15 +28,6 @@ export function AuthProvider({ children }) {
 
     const unsubscribe = onAuthStateChanged(auth, async (user) => {
       if (user) {
-        // Enforce Email Verification
-        if (user.providerData.some(p => p.providerId === 'password') && !user.emailVerified) {
-          await signOut(auth);
-          setUser(null);
-          setRole(null);
-          setLoading(false);
-          return;
-        }
-
         setUser(user);
         try {
           const { doc, getDoc } = await import('firebase/firestore');
