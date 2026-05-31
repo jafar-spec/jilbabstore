@@ -155,7 +155,7 @@ export default function LoginPage() {
           <form onSubmit={handleEmailLogin} style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
             <div>
               <input 
-                type="email" 
+                type="text" 
                 placeholder="البريد الإلكتروني" 
                 value={email}
                 onChange={(e) => { setEmail(e.target.value); setError(''); }}
