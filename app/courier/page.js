@@ -10,18 +10,28 @@ export default function CourierDashboard() {
   const router = useRouter();
 
   const [orders, setOrders] = useState([]);
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(false);
   const [courierTab, setCourierTab] = useState('to_deliver');
   const [toast, setToast] = useState({ show: false, message: '', type: 'success' });
 
   useEffect(() => {
     if (!authLoading && !user) {
-      router.push('/login');
+      window.location.replace('/login');
     }
     if (!authLoading && role === 'operator') {
-      router.push('/admin');
+      window.location.replace('/admin');
     }
   }, [user, role, authLoading, router]);
+
+  // Prevent back button from returning here after logout
+  useEffect(() => {
+    window.history.pushState(null, '', window.location.href);
+    const handlePopState = () => {
+      window.history.pushState(null, '', window.location.href);
+    };
+    window.addEventListener('popstate', handlePopState);
+    return () => window.removeEventListener('popstate', handlePopState);
+  }, []);
 
   const showToast = (message, type = 'success') => {
     setToast({ show: true, message, type });
@@ -110,7 +120,7 @@ export default function CourierDashboard() {
     window.location.replace('/login');
   };
 
-  if (authLoading || loading) {
+  if (authLoading) {
     return <div style={{ display: 'flex', minHeight: '100vh', justifyContent: 'center', alignItems: 'center', background: 'var(--bg-color)' }}>جاري التحميل...</div>;
   }
 
