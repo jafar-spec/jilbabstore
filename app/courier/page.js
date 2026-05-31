@@ -96,12 +96,20 @@ export default function CourierDashboard() {
     }
   };
 
-  const handleLogout = () => {
-    const { signOut } = require('firebase/auth');
-    const { auth } = require('@/lib/firebase');
-    signOut(auth).then(() => {
-      router.push('/login');
-    });
+  const handleLogout = async () => {
+    const { logout } = require('@/context/AuthContext');
+    // Clear sessionStorage for legacy courier
+    if (typeof window !== 'undefined') {
+      sessionStorage.removeItem('store_auth_role');
+    }
+    try {
+      const { signOut } = require('firebase/auth');
+      const { auth } = require('@/lib/firebase');
+      await signOut(auth);
+    } catch (e) {
+      // Legacy courier may not have Firebase auth
+    }
+    router.push('/login');
   };
 
   if (authLoading || loading) {
