@@ -34,11 +34,17 @@ export async function POST(request) {
       return NextResponse.json({ valid: false, error: 'Promo code is inactive' }, { status: 410 });
     }
 
+    // Normalize field names (handle old promos stored with 'value' and 'percentage')
+    const discountValue = promo.discountValue || promo.value || 0;
+    const type = (promo.type === 'percentage' ? 'percent' : promo.type) || 'fixed';
+
+    console.log('Promo found:', { code: promo.code, type, discountValue, raw: promo });
+
     return NextResponse.json({
       valid: true,
       code: promo.code,
-      type: promo.type,
-      discountValue: promo.discountValue
+      type: type,
+      discountValue: Number(discountValue)
     });
 
   } catch (error) {
