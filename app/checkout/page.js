@@ -7,6 +7,8 @@ import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { useAuth } from '@/context/AuthContext';
 import { createOrder } from '@/lib/db';
+import { collection, query, where, getDocs, limit, doc, setDoc, serverTimestamp } from 'firebase/firestore';
+import { db } from '@/lib/firebase';
 import Image from 'next/image';
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
@@ -95,53 +97,77 @@ export default function Checkout() {
     setStep(2);
   };
 
-  // --- Fixed Promo Code Logic (server-side validation) ---
+  // --- Fixed Promo Code Logic (client-side validation) ---
   const handleApplyPromo = async () => {
     const code = promoCodeInput.trim();
     if (!code) return;
     
     setPromoLoading(true);
     try {
-      const res = await fetch('/api/validate-promo', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ code })
-      });
+      // Query Firestore directly for the promo code
+      const promoQuery = query(
+        collection(db, 'promocodes'),
+        where('code', '==', code.toUpperCase()),
+        limit(1)
+      );
+      const snapshot = await getDocs(promoQuery);
 
-      if (res.ok) {
-        const promo = await res.json();
-        if (promo.valid) {
-          setAppliedPromo(promo);
-          const cTotal = Number(cartTotal);
-          const pVal = Number(promo.discountValue);
-          let discount = 0;
-          if (promo.type === 'percent') {
-            discount = cTotal * (pVal / 100);
-          } else if (promo.type === 'fixed') {
-            discount = pVal;
-          }
-          // Cap discount at cart total
-          discount = Math.min(discount, cTotal);
-          setDiscountAmount(discount);
-          showToast(t('promoApplied') || 'تم تطبيق كود الخصم!', 'success');
-        } else {
-          setAppliedPromo(null);
-          setDiscountAmount(0);
-          showToast(t('invalidPromo') || 'كود الخصم غير صالح', 'error');
-        }
-      } else {
+      if (snapshot.empty) {
         setAppliedPromo(null);
         setDiscountAmount(0);
-        const errData = await res.json().catch(() => ({}));
-        if (res.status === 410) {
-          showToast('كود الخصم منتهي الصلاحية', 'error');
-        } else {
-          showToast(t('invalidPromo') || 'كود الخصم غير صالح', 'error');
-        }
+        showToast(t('invalidPromo') || 'كود الخصم غير صالح', 'error');
+        setPromoLoading(false);
+        return;
       }
-    } catch (err) {
-      console.error(err);
-      showToast('خطأ في التحقق من الكود', 'error');
+
+      const promoData = snapshot.docs[0].data();
+
+      // Check if expired
+      if (promoData.expiresAt && new Date(promoData.expiresAt) < new Date()) {
+        setAppliedPromo(null);
+        setDiscountAmount(0);
+        showToast('كود الخصم منتهي الصلاحية', 'error');
+        setPromoLoading(false);
+        return;
+      }
+
+      // Check if disabled
+      if (promoData.active === false) {
+        setAppliedPromo(null);
+        setDiscountAmount(0);
+        showToast('كود الخصم غير مفعّل', 'error');
+        setPromoLoading(false);
+        return;
+      }
+
+      // Normalize field names
+      const discountValue = Number(promoData.discountValue || promoData.value || 0);
+      const type = (promoData.type === 'percentage' ? 'percent' : promoData.type) || 'fixed';
+
+      const promo = {
+        valid: true,
+        code: promoData.code,
+        type: type,
+        discountValue: discountValue
+      };
+
+      setAppliedPromo(promo);
+      const cTotal = Number(cartTotal);
+      let discount = 0;
+      if (promo.type === 'percent') {
+        discount = cTotal * (promo.discountValue / 100);
+      } else if (promo.type === 'fixed') {
+        discount = promo.discountValue;
+      }
+      // Cap discount at cart total
+      discount = Math.min(discount, cTotal);
+      setDiscountAmount(discount);
+      showToast(t('promoApplied') || 'تم تطبيق كود الخصم!', 'success');
+    } catch (error) {
+      console.error('Promo validation error:', error);
+      setAppliedPromo(null);
+      setDiscountAmount(0);
+      showToast(t('invalidPromo') || 'كود الخصم غير صالح', 'error');
     } finally {
       setPromoLoading(false);
     }
@@ -271,10 +297,35 @@ export default function Checkout() {
         status: orderStatus
       };
 
+      // Save/update customer profile in Firestore
+      const saveCustomerProfile = async (orderId) => {
+        try {
+          if (!user) return; // Only save for logged-in users
+          const customerRef = doc(db, 'customers', user.uid);
+          await setDoc(customerRef, {
+            uid: user.uid,
+            fullName: formData.fullName || '',
+            email: user.email || formData.email || '',
+            phone1: formData.phone1 || '',
+            phone2: formData.phone2 || '',
+            city: formData.city || '',
+            neighborhood: formData.neighborhood || '',
+            street: formData.street || '',
+            buildingFloor: formData.buildingFloor || '',
+            lastOrderId: orderId,
+            lastOrderDate: new Date().toISOString(),
+            updatedAt: serverTimestamp()
+          }, { merge: true });
+        } catch (err) {
+          console.error('Error saving customer profile:', err);
+        }
+      };
+
       // For PayPal, redirect to PayPal
       if (paymentMethod === 'paypal') {
         // Create order first
         const orderId = await createOrder(newOrder);
+        await saveCustomerProfile(orderId);
         
         // Build PayPal payment link
         const paypalClientId = process.env.NEXT_PUBLIC_PAYPAL_CLIENT_ID;
@@ -301,6 +352,7 @@ export default function Checkout() {
       }
       
       const orderId = await createOrder(newOrder);
+      await saveCustomerProfile(orderId);
       await generateReceipt(orderId, newOrder);
 
       if (typeof window !== 'undefined' && window.gtag) {

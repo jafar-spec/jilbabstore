@@ -36,10 +36,17 @@ service cloud.firestore {
       allow write: if isAdmin();
     }
 
-    // Promo Codes — Admin only (validated server-side via API)
+    // Promo Codes — Public read for checkout validation, admin write
     match /promocodes/{document=**} {
-      allow read: if isAdmin();
+      allow read: if true;
       allow write: if isAdmin();
+    }
+
+    // Customer Profiles — Own data or admin
+    match /customers/{userId} {
+      allow read: if isOwner(userId) || isAdmin();
+      allow create, update: if isOwner(userId) || isAdmin();
+      allow delete: if isAdmin();
     }
 
     // Orders — Strict access control

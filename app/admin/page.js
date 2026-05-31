@@ -1580,6 +1580,7 @@ export default function AdminDashboard() {
                           <th style={{ padding: '1rem' }}>رقم الطلب</th>
                           <th style={{ padding: '1rem' }}>العميل</th>
                           <th style={{ padding: '1rem' }}>الإجمالي</th>
+                          <th style={{ padding: '1rem' }}>طريقة الدفع</th>
                           <th style={{ padding: '1rem' }}>الحالة</th>
                           <th style={{ padding: '1rem' }}>التفاصيل</th>
                         </tr>
@@ -1591,8 +1592,14 @@ export default function AdminDashboard() {
                             <td style={{ padding: '1rem' }}>{order.shipping?.fullName || order.customerInfo?.fullName || 'غير متوفر'}</td>
                             <td style={{ padding: '1rem', color: 'var(--accent-color)', fontWeight: 'bold' }}>₪{order.total?.toFixed(2)}</td>
                             <td style={{ padding: '1rem' }}>
+                              <span style={{ padding: '4px 12px', borderRadius: '20px', fontSize: '0.85rem', fontWeight: '600', background: order.paymentMethod === 'cash' ? 'rgba(255,193,7,0.2)' : order.paymentMethod === 'paypal' ? 'rgba(0,119,181,0.2)' : 'rgba(40,167,69,0.2)', color: order.paymentMethod === 'cash' ? '#e6a800' : order.paymentMethod === 'paypal' ? '#0077b5' : '#28a745' }}>
+                                {order.paymentMethod === 'cash' ? '💵 عند الاستلام' : order.paymentMethod === 'paypal' ? '🔵 PayPal' : '💳 بطاقة'}
+                              </span>
+                            </td>
+                            <td style={{ padding: '1rem' }}>
                               <select value={order.status} onChange={(e) => updateOrderStatus(order.id, e.target.value)} style={{ padding: '0.5rem', borderRadius: '4px', border: '1px solid var(--glass-border)' }}>
                                 <option value="قيد المعالجة (مدفوع)">قيد المعالجة (مدفوع)</option>
+                                <option value="قيد المعالجة (الدفع عند الاستلام)">قيد المعالجة (الدفع عند الاستلام)</option>
                                 <option value="قيد المعالجة">قيد المعالجة</option>
                                 <option value="جاري التوصيل">جاري التوصيل</option>
                                 <option value="تم التوصيل">تم التوصيل</option>
@@ -2283,6 +2290,13 @@ export default function AdminDashboard() {
                   <div className="detail-item"><span>رقم الهاتف</span><strong dir="ltr">{selectedOrder.shipping?.phone1 || selectedOrder.shipping?.phone || selectedOrder.customerInfo?.phone1 || selectedOrder.customerInfo?.phone}</strong></div>
                   <div className="detail-item"><span>المدينة</span><strong>{selectedOrder.shipping?.city || selectedOrder.customerInfo?.city}</strong></div>
                   <div className="detail-item"><span>العنوان</span><strong>{(selectedOrder.shipping?.neighborhood || selectedOrder.customerInfo?.neighborhood)} - {(selectedOrder.shipping?.street || selectedOrder.customerInfo?.street)}</strong></div>
+                  <div className="detail-item"><span>البريد الإلكتروني</span><strong>{selectedOrder.customerInfo?.email || selectedOrder.shipping?.email || '—'}</strong></div>
+                  <div className="detail-item"><span>هاتف بديل</span><strong dir="ltr">{selectedOrder.shipping?.phone2 || selectedOrder.customerInfo?.phone2 || '—'}</strong></div>
+                  <div className="detail-item"><span>طريقة الدفع</span><strong>{selectedOrder.paymentMethod === 'cash' ? '💵 الدفع عند الاستلام' : selectedOrder.paymentMethod === 'paypal' ? '🔵 PayPal' : '💳 بطاقة ائتمان'}</strong></div>
+                  <div className="detail-item"><span>حالة الطلب</span><strong>{selectedOrder.status}</strong></div>
+                  <div className="detail-item"><span>تاريخ الطلب</span><strong>{selectedOrder.date ? new Date(selectedOrder.date).toLocaleString('ar-EG') : '—'}</strong></div>
+                  {selectedOrder.promoCode && <div className="detail-item"><span>كود الخصم</span><strong>{selectedOrder.promoCode}</strong></div>}
+                  {selectedOrder.discount > 0 && <div className="detail-item"><span>قيمة الخصم</span><strong style={{color: '#e74c3c'}}>-₪{selectedOrder.discount?.toFixed(2)}</strong></div>}
                 </div>
               </div>
 
