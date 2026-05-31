@@ -16,7 +16,7 @@ import {
   getAllPromoCodes, addPromoCode, deletePromoCode,
   getAllTickets, updateTicket, deleteTicket, updateSectionSubsections,
   updateOrderRouteSequence, getAllReviews, updateReview, deleteReview,
-  getAllCouriers, addCourier, deleteCourier
+
 } from '@/lib/db';
 import AdminMap from '@/components/AdminMap';
 import { useAuth } from '@/context/AuthContext';
@@ -100,11 +100,7 @@ export default function AdminDashboard() {
   const [courierRouteMode, setCourierRouteMode] = useState(false);
   const [routeOrders, setRouteOrders] = useState([]);
 
-  // COURIERS MANAGEMENT STATE
-  const [couriersList, setCouriersList] = useState([]);
-  const [newCourierPhone, setNewCourierPhone] = useState('');
-  const [newCourierCountryCode, setNewCourierCountryCode] = useState('+972');
-  const [isAddingCourier, setIsAddingCourier] = useState(false);
+
 
   // CMS STATE
   const [cmsSettings, setCmsSettings] = useState({
@@ -163,7 +159,7 @@ export default function AdminDashboard() {
   const fetchData = async () => {
     setLoading(true);
     try {
-      const [fetchedOrders, fetchedProducts, fetchedSections, fetchedSubscribers, fetchedSettings, fetchedPromoCodes, fetchedTickets, fetchedReviews, fetchedCouriers] = await Promise.all([
+      const [fetchedOrders, fetchedProducts, fetchedSections, fetchedSubscribers, fetchedSettings, fetchedPromoCodes, fetchedTickets, fetchedReviews] = await Promise.all([
         getAllOrders(),
         getProducts(),
         getSections(),
@@ -172,7 +168,6 @@ export default function AdminDashboard() {
         getAllPromoCodes(),
         getAllTickets(),
         getAllReviews(),
-        getAllCouriers()
       ]);
       setOrders(fetchedOrders);
       setProducts(fetchedProducts);
@@ -181,7 +176,6 @@ export default function AdminDashboard() {
       setPromoCodes(fetchedPromoCodes || []);
       setTickets(fetchedTickets || []);
       setAdminReviews(fetchedReviews || []);
-      setCouriersList(fetchedCouriers || []);
       
       if (fetchedSettings) {
         setCmsSettings(fetchedSettings);
@@ -205,39 +199,7 @@ export default function AdminDashboard() {
     window.location.replace('/login');
   };
 
-  // --- COURIERS MANAGEMENT LOGIC ---
-  const handleAddCourier = async (e) => {
-    e.preventDefault();
-    if (!newCourierPhone) return;
-    
-    const formattedLocal = newCourierPhone.replace(/^0+/, '');
-    const finalPhone = `${newCourierCountryCode}${formattedLocal}`;
-    
-    setIsAddingCourier(true);
-    try {
-      await addCourier(finalPhone);
-      setNewCourierPhone('');
-      showToast('تمت إضافة المندوب بنجاح', 'success');
-      fetchData();
-    } catch (err) {
-      console.error(err);
-      showToast('حدث خطأ أثناء الإضافة', 'error');
-    } finally {
-      setIsAddingCourier(false);
-    }
-  };
 
-  const handleDeleteCourier = async (id) => {
-    if (!confirm('هل أنت متأكد من حذف هذا المندوب؟')) return;
-    try {
-      await deleteCourier(id);
-      showToast('تم الحذف بنجاح', 'success');
-      fetchData();
-    } catch (err) {
-      console.error(err);
-      showToast('حدث خطأ أثناء الحذف', 'error');
-    }
-  };
 
   // --- SECTIONS LOGIC ---
   const handleAddSection = async (e) => {
@@ -876,9 +838,7 @@ export default function AdminDashboard() {
               <button onClick={() => setActiveTab('map')} style={navButtonStyle(activeTab === 'map')}>
                 <i className="fa-solid fa-map-location-dot" style={{ marginLeft: '10px' }}></i> خريطة التوزيع
               </button>
-              <button onClick={() => setActiveTab('couriers')} style={navButtonStyle(activeTab === 'couriers')}>
-                <i className="fa-solid fa-motorcycle" style={{ marginLeft: '10px' }}></i> إدارة المناديب
-              </button>
+
               <button onClick={() => setActiveTab('newsletter')} style={navButtonStyle(activeTab === 'newsletter')}>
                 <i className="fa-solid fa-envelope" style={{ marginLeft: '10px' }}></i> النشرة البريدية
               </button>
@@ -1925,88 +1885,7 @@ export default function AdminDashboard() {
               </div>
             )}
 
-            {/* COURIERS MANAGEMENT DASHBOARD */}
-            {activeTab === 'couriers' && role === 'operator' && (
-              <div>
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '2rem' }}>
-                  <h2 style={{ fontSize: '1.8rem', color: 'var(--text-primary)' }}>إدارة المناديب (Couriers)</h2>
-                </div>
 
-                {/* Add Courier Form */}
-                <div style={{ background: 'var(--surface-color)', padding: '2rem', borderRadius: '12px', border: '1px solid var(--border-color)', marginBottom: '2rem' }}>
-                  <h3 style={{ marginBottom: '1rem', color: 'var(--text-primary)' }}>إضافة مندوب جديد</h3>
-                  <p style={{ color: 'var(--text-secondary)', marginBottom: '1rem', fontSize: '0.9rem' }}>أدخل رقم هاتف المندوب. سيتمكن من تسجيل الدخول فوراً باستخدام رقمه والوصول إلى لوحة تحكم المناديب.</p>
-                  
-                  <form onSubmit={handleAddCourier} style={{ display: 'flex', gap: '1rem', alignItems: 'flex-start', flexWrap: 'wrap' }}>
-                    <div style={{ flex: 1, minWidth: '250px' }}>
-                      <div style={{ display: 'flex', gap: '0.5rem' }}>
-                        <select 
-                          value={newCourierCountryCode} 
-                          onChange={(e) => setNewCourierCountryCode(e.target.value)}
-                          style={{ padding: '0.8rem', borderRadius: '8px', border: '1px solid var(--border-color)', background: 'var(--bg-color)', color: 'var(--text-primary)', outline: 'none' }}
-                          dir="ltr"
-                        >
-                          <option value="+972">IL (+972)</option>
-                          <option value="+970">PS (+970)</option>
-                          <option value="+962">JO (+962)</option>
-                        </select>
-                        <input 
-                          type="tel" 
-                          placeholder="رقم الهاتف (بدون صفر)" 
-                          value={newCourierPhone}
-                          onChange={(e) => setNewCourierPhone(e.target.value.replace(/\D/g, ''))}
-                          style={{ flex: 1, padding: '0.8rem', borderRadius: '8px', border: '1px solid var(--border-color)', background: 'var(--bg-color)', color: 'var(--text-primary)', outline: 'none', letterSpacing: '1px' }}
-                          dir="ltr"
-                          required
-                        />
-                      </div>
-                    </div>
-                    <button type="submit" disabled={isAddingCourier || !newCourierPhone} className="btn-primary" style={{ padding: '0.8rem 2rem', borderRadius: '8px', cursor: 'pointer', whiteSpace: 'nowrap', opacity: (isAddingCourier || !newCourierPhone) ? 0.7 : 1 }}>
-                      {isAddingCourier ? 'جاري الإضافة...' : 'إضافة المندوب'}
-                    </button>
-                  </form>
-                </div>
-
-                {/* Couriers List */}
-                <div style={{ background: 'var(--surface-color)', padding: '2rem', borderRadius: '12px', border: '1px solid var(--border-color)' }}>
-                  <h3 style={{ marginBottom: '1rem', color: 'var(--text-primary)' }}>قائمة المناديب</h3>
-                  
-                  {couriersList.length === 0 ? (
-                    <div style={{ textAlign: 'center', padding: '3rem', color: 'var(--text-secondary)' }}>
-                      <i className="fa-solid fa-motorcycle" style={{ fontSize: '3rem', marginBottom: '1rem', opacity: 0.5 }}></i>
-                      <p>لا يوجد مناديب مضافين حالياً</p>
-                    </div>
-                  ) : (
-                    <div style={{ overflowX: 'auto' }}>
-                      <table style={{ width: '100%', borderCollapse: 'collapse' }}>
-                        <thead>
-                          <tr style={{ background: 'var(--bg-color)', borderBottom: '2px solid var(--border-color)' }}>
-                            <th style={{ padding: '1rem', textAlign: 'right', color: 'var(--text-secondary)' }}>رقم الهاتف</th>
-                            <th style={{ padding: '1rem', textAlign: 'right', color: 'var(--text-secondary)' }}>تاريخ الإضافة</th>
-                            <th style={{ padding: '1rem', textAlign: 'left', color: 'var(--text-secondary)' }}>إجراءات</th>
-                          </tr>
-                        </thead>
-                        <tbody>
-                          {couriersList.map(courier => (
-                            <tr key={courier.id} style={{ borderBottom: '1px solid var(--border-color)' }}>
-                              <td style={{ padding: '1rem', fontWeight: 'bold' }} dir="ltr" className="text-right">{courier.phone || courier.id}</td>
-                              <td style={{ padding: '1rem', color: 'var(--text-secondary)' }}>
-                                {courier.createdAt ? new Date(courier.createdAt).toLocaleDateString('ar-EG') : 'غير متوفر'}
-                              </td>
-                              <td style={{ padding: '1rem', textAlign: 'left' }}>
-                                <button onClick={() => handleDeleteCourier(courier.id)} style={{ background: '#fee2e2', color: '#dc2626', border: 'none', padding: '0.5rem 1rem', borderRadius: '6px', cursor: 'pointer', fontWeight: 'bold' }}>
-                                  حذف
-                                </button>
-                              </td>
-                            </tr>
-                          ))}
-                        </tbody>
-                      </table>
-                    </div>
-                  )}
-                </div>
-              </div>
-            )}
 
 
 
