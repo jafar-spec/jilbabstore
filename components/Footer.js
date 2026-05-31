@@ -87,7 +87,6 @@ export default function Footer() {
             <li><Link href="/#shop" style={{ color: 'var(--text-secondary)', textDecoration: 'none', fontSize: '0.95rem', transition: 'var(--transition)' }}>{t('shop')}</Link></li>
             <li><Link href="/track" style={{ color: 'var(--text-secondary)', textDecoration: 'none', fontSize: '0.95rem', transition: 'var(--transition)' }}>{t('trackOrder')}</Link></li>
             <li><Link href="/wishlist" style={{ color: 'var(--text-secondary)', textDecoration: 'none', fontSize: '0.95rem', transition: 'var(--transition)' }}>{t('wishlist')}</Link></li>
-            <li><Link href="/support" style={{ color: 'var(--text-secondary)', textDecoration: 'none', fontSize: '0.95rem', transition: 'var(--transition)' }}>{t('customerService') || 'Customer Service'}</Link></li>
             <li><Link href="/profile" style={{ color: 'var(--text-secondary)', textDecoration: 'none', fontSize: '0.95rem', transition: 'var(--transition)' }}>{t('profile')}</Link></li>
             <li><Link href="/privacy" style={{ color: 'var(--text-secondary)', textDecoration: 'none', fontSize: '0.95rem', transition: 'var(--transition)' }}>{t('privacyPolicy')}</Link></li>
             <li><Link href="/returns" style={{ color: 'var(--text-secondary)', textDecoration: 'none', fontSize: '0.95rem', transition: 'var(--transition)' }}>{t('returnPolicy')}</Link></li>
