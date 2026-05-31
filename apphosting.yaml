@@ -1,7 +1,7 @@
 runConfig:
   runtime: nodejs22
   cpu: 1
-  memoryMiB: 512
+  memoryMiB: 1024
   concurrency: 80
 
 env:
@@ -21,12 +21,3 @@ env:
     value: G-2MZ6GCKN1H
   - variable: NEXT_PUBLIC_COURIER_KEY
     value: courier123
-
-outputFiles:
-  serverApp:
-    include:
-      - .next
-      - node_modules
-      - package.json
-      - next.config.mjs
-      - public
