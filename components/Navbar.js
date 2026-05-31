@@ -8,6 +8,8 @@ import CategorySidebar from './CategorySidebar';
 import SearchOverlay from './SearchOverlay';
 import { getSections } from '@/lib/db';
 import Image from 'next/image';
+import { onAuthStateChanged } from 'firebase/auth';
+import { auth } from '@/lib/firebase';
 
 export default function Navbar() {
   const { cartCount, toggleCart } = useCart();
@@ -15,11 +17,19 @@ export default function Navbar() {
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
   const [isSearchOpen, setIsSearchOpen] = useState(false);
   const [sections, setSections] = useState([]);
+  const [customerUser, setCustomerUser] = useState(null);
   const router = useRouter();
   const pathname = usePathname();
 
   useEffect(() => {
     getSections().then(setSections).catch(console.error);
+  }, []);
+
+  useEffect(() => {
+    const unsubscribe = onAuthStateChanged(auth, (user) => {
+      setCustomerUser(user);
+    });
+    return () => unsubscribe();
   }, []);
 
 
@@ -106,7 +116,26 @@ export default function Navbar() {
               <i className="fa-regular fa-heart"></i>
             </Link>
             <Link href="/profile" className="hide-mobile" style={{ fontSize: '1.2rem', color: 'var(--text-primary)', textDecoration: 'none' }} title={t('profile')}>
-              <i className="fa-solid fa-user"></i>
+              {customerUser ? (
+                <span style={{
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  width: '28px',
+                  height: '28px',
+                  borderRadius: '50%',
+                  backgroundColor: 'var(--accent-color)',
+                  color: '#fff',
+                  fontSize: '0.75rem',
+                  fontWeight: 600,
+                  lineHeight: 1,
+                  textTransform: 'uppercase'
+                }}>
+                  {customerUser.displayName ? customerUser.displayName.charAt(0) : customerUser.email ? customerUser.email.charAt(0) : <i className="fa-solid fa-user" style={{ fontSize: '0.7rem' }}></i>}
+                </span>
+              ) : (
+                <i className="fa-regular fa-user"></i>
+              )}
             </Link>
             <button className="cart-icon" onClick={toggleCart} aria-label="Cart" style={{ fontWeight: 300, background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-primary)' }}>
               <i className="fa-solid fa-bag-shopping" style={{ fontSize: '1.2rem' }}></i>

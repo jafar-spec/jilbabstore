@@ -39,7 +39,7 @@ export function AuthProvider({ children }) {
           if (docSnap.exists()) {
             setRole(docSnap.data().role || 'operator');
           } else {
-            setRole(null);
+            setRole('customer');
           }
         } catch (error) {
           console.error("Error fetching role", error);
