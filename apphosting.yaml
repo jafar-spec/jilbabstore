@@ -4,6 +4,24 @@ runConfig:
   memoryMiB: 512
   concurrency: 80
 
+env:
+  - variable: NEXT_PUBLIC_FIREBASE_API_KEY
+    value: AIzaSyBowyQqnhsCM855pfkjpA9_1fExWNWmVBo
+  - variable: NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN
+    value: jilbab-store.firebaseapp.com
+  - variable: NEXT_PUBLIC_FIREBASE_PROJECT_ID
+    value: jilbab-store
+  - variable: NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET
+    value: jilbab-store.firebasestorage.app
+  - variable: NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID
+    value: "784065108209"
+  - variable: NEXT_PUBLIC_FIREBASE_APP_ID
+    value: "1:784065108209:web:62295f84f4e7ae2ceb3150"
+  - variable: NEXT_PUBLIC_FIREBASE_MEASUREMENT_ID
+    value: G-2MZ6GCKN1H
+  - variable: NEXT_PUBLIC_COURIER_KEY
+    value: courier123
+
 outputFiles:
   serverApp:
     include:
