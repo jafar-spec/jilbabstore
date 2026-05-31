@@ -8,8 +8,8 @@ import CustomerServiceWidget from '@/components/CustomerServiceWidget';
 export default function ClientWrapper({ children }) {
   const pathname = usePathname();
   
-  // Do not render consumer layout in the admin dashboard
-  if (pathname && pathname.startsWith('/admin')) {
+  // Do not render consumer layout in admin or courier dashboards
+  if (pathname && (pathname.startsWith('/admin') || pathname.startsWith('/courier'))) {
     return <>{children}</>;
   }
 
