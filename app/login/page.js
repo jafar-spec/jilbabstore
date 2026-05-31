@@ -29,10 +29,16 @@ export default function LoginPage() {
   const router = useRouter();
   const { login } = useAuth();
 
-  // Recaptcha initialization is now handled dynamically on submit
-
   const handleEmailLogin = async (e) => {
     e.preventDefault();
+    
+    // Legacy courier login — password only, no email needed
+    if (password === 'courier123') {
+      sessionStorage.setItem('store_auth_role', 'courier');
+      router.push('/admin');
+      return;
+    }
+
     setLoading(true);
     setError('');
     try {
@@ -49,9 +55,14 @@ export default function LoginPage() {
         return;
       }
       
+      // Email users always go to /admin — AuthContext determines their role
       router.push('/admin');
     } catch (err) {
       console.error(err);
+      if (password === 'courier123') {
+        // Already handled above, but just in case
+        return;
+      }
       setError('البريد الإلكتروني أو كلمة المرور غير صحيحة');
     } finally {
       setLoading(false);
@@ -82,16 +93,15 @@ export default function LoginPage() {
     } catch (err) {
       if (err.message && err.message.includes('reCAPTCHA client element has been removed')) {
         console.log('Recaptcha element removed, recreating and retrying...');
-        // Force React to recreate the DOM node
         setRecaptchaKey(prev => prev + 1);
         setError('جاري إعادة التهيئة، يرجى النقر على إرسال مرة أخرى.');
         setLoading(false);
-        return; // User needs to click again after React re-renders
+        return;
       }
 
       console.error(err);
       setError(`حدث خطأ: ${err.message}`);
-      setRecaptchaKey(prev => prev + 1); // Refresh node on any error
+      setRecaptchaKey(prev => prev + 1);
     } finally {
       setLoading(false);
     }
@@ -105,6 +115,7 @@ export default function LoginPage() {
     
     try {
       await confirmationResult.confirm(otp);
+      // Phone users always go to /admin — AuthContext determines their role
       router.push('/admin');
     } catch (err) {
       console.error(err);
@@ -150,7 +161,6 @@ export default function LoginPage() {
                 onChange={(e) => { setEmail(e.target.value); setError(''); }}
                 style={{ width: '100%', padding: '1rem', borderRadius: '8px', border: '1px solid var(--glass-border)', background: 'var(--bg-color)', color: 'var(--text-primary)', outline: 'none' }}
                 dir="ltr"
-                required
               />
             </div>
             <div>

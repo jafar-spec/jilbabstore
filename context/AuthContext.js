@@ -14,10 +14,19 @@ const AuthContext = createContext();
 export function AuthProvider({ children }) {
   const [user, setUser] = useState(null);
   const [loading, setLoading] = useState(true);
-
   const [role, setRole] = useState(null);
 
   useEffect(() => {
+    // Check for legacy courier123 session first
+    if (typeof window !== 'undefined' && sessionStorage.getItem('store_auth_role') === 'courier') {
+      setUser({ uid: 'legacy_courier', isLegacy: true });
+      setRole('courier');
+      setLoading(false);
+      // Still set up the listener so logout works, but don't let it override
+      const unsubscribe = onAuthStateChanged(auth, () => {});
+      return unsubscribe;
+    }
+
     const unsubscribe = onAuthStateChanged(auth, async (user) => {
       if (user) {
         // Enforce Email Verification for Email/Password users
@@ -73,7 +82,13 @@ export function AuthProvider({ children }) {
     return createUserWithEmailAndPassword(auth, email, password);
   };
 
-  const logout = () => {
+  const logout = async () => {
+    // Clear legacy courier session if present
+    if (typeof window !== 'undefined') {
+      sessionStorage.removeItem('store_auth_role');
+    }
+    setUser(null);
+    setRole(null);
     return signOut(auth);
   };
 

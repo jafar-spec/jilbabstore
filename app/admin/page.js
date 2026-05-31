@@ -144,14 +144,15 @@ export default function AdminDashboard() {
   const availableSizes = ['XS', 'S', 'M', 'L', 'XL', 'XXL', '3XL', 'One Size'];
 
   useEffect(() => {
-    if (!authLoading) {
-      if (!user) {
-        router.push('/login');
-      } else {
-        const r = authRole || 'operator';
-        setRole(r);
-        setActiveTab(r === 'operator' ? 'dashboard' : 'delivery');
+    if (!authLoading && !user) {
+      router.push('/login');
+    } else if (!authLoading && user && authRole) {
+      setRole(authRole);
+      if (authRole === 'operator' || authRole === 'courier') {
+        setActiveTab(authRole === 'operator' ? 'dashboard' : 'delivery');
         fetchData();
+      } else {
+        router.push('/');
       }
     }
   }, [user, authLoading, authRole, router]);
@@ -195,8 +196,8 @@ export default function AdminDashboard() {
     }
   };
 
-  const handleLogout = () => {
-    sessionStorage.removeItem('store_auth_role');
+  const handleLogout = async () => {
+    await logout();
     router.push('/login');
   };
 
@@ -895,7 +896,7 @@ export default function AdminDashboard() {
               </button>
             </>
           )}
-          
+
           {role === 'courier' && (
             <button onClick={() => setActiveTab('delivery')} style={navButtonStyle(activeTab === 'delivery')}>
               <i className="fa-solid fa-truck" style={{ marginLeft: '10px' }}></i> قائمة التوصيل
@@ -925,7 +926,8 @@ export default function AdminDashboard() {
               activeTab === 'cms' ? 'إدارة المحتوى (CMS)' :
               activeTab === 'promos' ? 'كوبونات الخصم والترويج' :
               activeTab === 'customers' ? 'قاعدة بيانات العملاء والمشتريات' :
-              activeTab === 'orders' ? 'إدارة الطلبات الواردة' : 'بيانات التوصيل والتوزيع'}
+              activeTab === 'orders' ? 'إدارة الطلبات الواردة' : 
+              activeTab === 'delivery' ? 'طلبات التوصيل الخاصة بك' : 'بيانات التوصيل والتوزيع'}
           </h1>
           
           {(activeTab === 'orders' || activeTab === 'delivery') && (
@@ -1651,6 +1653,82 @@ export default function AdminDashboard() {
               </div>
             )}
 
+            {/* COURIER DELIVERY DASHBOARD RESTORED */}
+            {activeTab === 'delivery' && role === 'courier' && (
+              <div style={{ padding: '1rem' }}>
+                <div style={{ display: 'flex', gap: '1rem', marginBottom: '2rem' }}>
+                  <button 
+                    onClick={() => setCourierTab('to_deliver')} 
+                    style={{ flex: 1, padding: '1rem', borderRadius: '8px', border: 'none', background: courierTab === 'to_deliver' ? 'var(--accent-color)' : 'var(--glass-bg)', color: courierTab === 'to_deliver' ? '#fff' : 'var(--text-primary)', cursor: 'pointer', fontWeight: 'bold', fontSize: '1.1rem' }}
+                  >
+                    <i className="fa-solid fa-truck" style={{ marginLeft: '10px' }}></i> جاري التوصيل
+                  </button>
+                  <button 
+                    onClick={() => setCourierTab('delivered')} 
+                    style={{ flex: 1, padding: '1rem', borderRadius: '8px', border: 'none', background: courierTab === 'delivered' ? 'var(--accent-color)' : 'var(--glass-bg)', color: courierTab === 'delivered' ? '#fff' : 'var(--text-primary)', cursor: 'pointer', fontWeight: 'bold', fontSize: '1.1rem' }}
+                  >
+                    <i className="fa-solid fa-check-circle" style={{ marginLeft: '10px' }}></i> تم التوصيل
+                  </button>
+                </div>
+                <div style={{ display: 'grid', gap: '1.5rem', gridTemplateColumns: 'repeat(auto-fill, minmax(320px, 1fr))' }}>
+                  {orders
+                    .filter(o => courierTab === 'to_deliver' ? o.status === 'جاري التوصيل' : o.status === 'تم التوصيل')
+                    .map(order => {
+                      const addr = order.shipping || order.customerInfo || {};
+                      const fullAddress = `${addr.city || ''} ${addr.neighborhood || ''} ${addr.street || ''}`;
+                      return (
+                      <div key={order.id} style={{ background: 'var(--surface-color)', padding: '1.5rem', borderRadius: '16px', border: '1px solid var(--glass-border)', boxShadow: '0 4px 15px rgba(0,0,0,0.05)', display: 'flex', flexDirection: 'column', gap: '1rem' }}>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderBottom: '1px solid var(--glass-border)', paddingBottom: '0.8rem' }}>
+                          <span style={{ fontWeight: 'bold', fontSize: '1.1rem' }}>#{order.id.slice(0, 8)}</span>
+                          <span style={{ color: 'var(--accent-color)', fontWeight: 'bold', fontSize: '1.2rem' }}>₪{order.total?.toFixed(2)}</span>
+                        </div>
+                        <div>
+                          <div style={{ fontWeight: 'bold', marginBottom: '0.3rem', fontSize: '1.1rem' }}>{addr.fullName || 'غير متوفر'}</div>
+                          <div style={{ color: 'var(--text-secondary)', display: 'flex', alignItems: 'flex-start', gap: '8px', marginBottom: '0.5rem' }}>
+                            <i className="fa-solid fa-location-dot" style={{ marginTop: '4px', color: '#e74c3c' }}></i>
+                            <span>{fullAddress} {addr.buildingFloor ? `(${addr.buildingFloor})` : ''}</span>
+                          </div>
+                          {addr.notes && (
+                            <div style={{ background: '#fff3cd', color: '#856404', padding: '0.5rem', borderRadius: '4px', fontSize: '0.9rem', marginBottom: '0.5rem' }}>
+                              <strong>ملاحظة:</strong> {addr.notes}
+                            </div>
+                          )}
+                        </div>
+                        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.5rem', marginTop: 'auto' }}>
+                          <a href={`tel:${addr.phone1}`} style={{ textAlign: 'center', padding: '0.8rem', background: '#e3f2fd', color: '#1976d2', borderRadius: '8px', textDecoration: 'none', fontWeight: 'bold' }}>
+                            <i className="fa-solid fa-phone"></i> اتصال
+                          </a>
+                          <a href={`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(fullAddress)}`} target="_blank" rel="noreferrer" style={{ textAlign: 'center', padding: '0.8rem', background: '#e8f5e9', color: '#388e3c', borderRadius: '8px', textDecoration: 'none', fontWeight: 'bold' }}>
+                            <i className="fa-solid fa-map-location-dot"></i> الخريطة
+                          </a>
+                        </div>
+                        {courierTab === 'to_deliver' ? (
+                          <button 
+                            onClick={() => updateOrderStatus(order.id, 'تم التوصيل')}
+                            style={{ width: '100%', padding: '1rem', background: '#27ae60', color: 'white', border: 'none', borderRadius: '8px', cursor: 'pointer', fontWeight: 'bold', fontSize: '1.1rem', display: 'flex', justifyContent: 'center', alignItems: 'center', gap: '10px' }}
+                          >
+                            <i className="fa-solid fa-check"></i> إنهاء التوصيل (تم)
+                          </button>
+                        ) : (
+                          <button 
+                            disabled
+                            style={{ width: '100%', padding: '1rem', background: '#ecf0f1', color: '#95a5a6', border: 'none', borderRadius: '8px', fontWeight: 'bold', fontSize: '1.1rem', display: 'flex', justifyContent: 'center', alignItems: 'center', gap: '10px' }}
+                          >
+                            <i className="fa-solid fa-check-double"></i> تم التوصيل مسبقاً
+                          </button>
+                        )}
+                        <button 
+                          onClick={() => setSelectedOrder(order)} 
+                          style={{ width: '100%', padding: '0.8rem', background: 'transparent', color: 'var(--text-secondary)', border: '1px solid var(--glass-border)', borderRadius: '8px', cursor: 'pointer', marginTop: '-0.5rem' }}
+                        >
+                          عرض تفاصيل الطلب
+                        </button>
+                      </div>
+                    )})}
+                </div>
+              </div>
+            )}
+
             {/* CMS TAB */}
             {activeTab === 'cms' && role === 'operator' && (
               <div style={{ background: 'var(--surface-color)', padding: '2rem', borderRadius: '16px', border: '1px solid var(--glass-border)' }}>
@@ -2007,97 +2085,7 @@ export default function AdminDashboard() {
               </div>
             )}
 
-            {/* COURIER DELIVERY DASHBOARD */}
-            {activeTab === 'delivery' && role === 'courier' && (
-              <div style={{ padding: '1rem' }}>
-                
-                {/* Courier Tabs */}
-                <div style={{ display: 'flex', gap: '1rem', marginBottom: '2rem' }}>
-                  <button 
-                    onClick={() => setCourierTab('to_deliver')} 
-                    style={{ flex: 1, padding: '1rem', borderRadius: '8px', border: 'none', background: courierTab === 'to_deliver' ? 'var(--accent-color)' : 'var(--glass-bg)', color: courierTab === 'to_deliver' ? '#fff' : 'var(--text-primary)', cursor: 'pointer', fontWeight: 'bold', fontSize: '1.1rem' }}
-                  >
-                    <i className="fa-solid fa-truck" style={{ marginLeft: '10px' }}></i> جاري التوصيل
-                  </button>
-                  <button 
-                    onClick={() => setCourierTab('delivered')} 
-                    style={{ flex: 1, padding: '1rem', borderRadius: '8px', border: 'none', background: courierTab === 'delivered' ? 'var(--accent-color)' : 'var(--glass-bg)', color: courierTab === 'delivered' ? '#fff' : 'var(--text-primary)', cursor: 'pointer', fontWeight: 'bold', fontSize: '1.1rem' }}
-                  >
-                    <i className="fa-solid fa-check-circle" style={{ marginLeft: '10px' }}></i> تم التوصيل
-                  </button>
-                </div>
 
-                {/* Orders Grid */}
-                <div style={{ display: 'grid', gap: '1.5rem', gridTemplateColumns: 'repeat(auto-fill, minmax(320px, 1fr))' }}>
-                  {orders
-                    .filter(o => courierTab === 'to_deliver' ? o.status === 'جاري التوصيل' : o.status === 'تم التوصيل')
-                    .sort((a, b) => (a.routeOrder || 0) - (b.routeOrder || 0))
-                    .map(order => {
-                      const addr = order.shipping || order.customerInfo || {};
-                      const fullAddress = `${addr.city || ''} ${addr.neighborhood || ''} ${addr.street || ''}`;
-                      return (
-                      <div key={order.id} style={{ background: 'var(--surface-color)', padding: '1.5rem', borderRadius: '16px', border: '1px solid var(--glass-border)', boxShadow: '0 4px 15px rgba(0,0,0,0.05)', display: 'flex', flexDirection: 'column', gap: '1rem' }}>
-                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderBottom: '1px solid var(--glass-border)', paddingBottom: '0.8rem' }}>
-                          <span style={{ fontWeight: 'bold', fontSize: '1.1rem' }}>#{order.id.slice(0, 8)}</span>
-                          <span style={{ color: 'var(--accent-color)', fontWeight: 'bold', fontSize: '1.2rem' }}>₪{order.total?.toFixed(2)}</span>
-                        </div>
-                        
-                        <div>
-                          <div style={{ fontWeight: 'bold', marginBottom: '0.3rem', fontSize: '1.1rem' }}>{addr.fullName || 'غير متوفر'}</div>
-                          <div style={{ color: 'var(--text-secondary)', display: 'flex', alignItems: 'flex-start', gap: '8px', marginBottom: '0.5rem' }}>
-                            <i className="fa-solid fa-location-dot" style={{ marginTop: '4px', color: '#e74c3c' }}></i>
-                            <span>{fullAddress} {addr.buildingFloor ? `(${addr.buildingFloor})` : ''}</span>
-                          </div>
-                          {addr.notes && (
-                            <div style={{ background: '#fff3cd', color: '#856404', padding: '0.5rem', borderRadius: '4px', fontSize: '0.9rem', marginBottom: '0.5rem' }}>
-                              <strong>ملاحظة:</strong> {addr.notes}
-                            </div>
-                          )}
-                        </div>
-
-                        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.5rem', marginTop: 'auto' }}>
-                          <a href={`tel:${addr.phone1}`} style={{ textAlign: 'center', padding: '0.8rem', background: '#e3f2fd', color: '#1976d2', borderRadius: '8px', textDecoration: 'none', fontWeight: 'bold' }}>
-                            <i className="fa-solid fa-phone"></i> اتصال
-                          </a>
-                          <a href={`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(fullAddress)}`} target="_blank" rel="noreferrer" style={{ textAlign: 'center', padding: '0.8rem', background: '#e8f5e9', color: '#388e3c', borderRadius: '8px', textDecoration: 'none', fontWeight: 'bold' }}>
-                            <i className="fa-solid fa-map-location-dot"></i> الخريطة
-                          </a>
-                        </div>
-                        
-                        {courierTab === 'to_deliver' ? (
-                          <button 
-                            onClick={() => updateOrderStatus(order.id, 'تم التوصيل')}
-                            style={{ width: '100%', padding: '1rem', background: '#27ae60', color: 'white', border: 'none', borderRadius: '8px', cursor: 'pointer', fontWeight: 'bold', fontSize: '1.1rem', display: 'flex', justifyContent: 'center', alignItems: 'center', gap: '10px' }}
-                          >
-                            <i className="fa-solid fa-check"></i> إنهاء التوصيل (تم)
-                          </button>
-                        ) : (
-                          <button 
-                            disabled
-                            style={{ width: '100%', padding: '1rem', background: '#ecf0f1', color: '#95a5a6', border: 'none', borderRadius: '8px', fontWeight: 'bold', fontSize: '1.1rem', display: 'flex', justifyContent: 'center', alignItems: 'center', gap: '10px' }}
-                          >
-                            <i className="fa-solid fa-check-double"></i> تم التوصيل مسبقاً
-                          </button>
-                        )}
-                        
-                        <button 
-                          onClick={() => setSelectedOrder(order)} 
-                          style={{ width: '100%', padding: '0.8rem', background: 'transparent', color: 'var(--text-secondary)', border: '1px solid var(--glass-border)', borderRadius: '8px', cursor: 'pointer', marginTop: '-0.5rem' }}
-                        >
-                          عرض تفاصيل الطلب
-                        </button>
-                      </div>
-                    )})}
-                  
-                  {orders.filter(o => courierTab === 'to_deliver' ? o.status === 'جاري التوصيل' : o.status === 'تم التوصيل').length === 0 && (
-                    <div style={{ gridColumn: '1 / -1', textAlign: 'center', padding: '3rem', color: 'var(--text-secondary)' }}>
-                      <i className="fa-solid fa-clipboard-check" style={{ fontSize: '3rem', marginBottom: '1rem', opacity: 0.5 }}></i>
-                      <h3>لا توجد طلبات في هذه القائمة حالياً.</h3>
-                    </div>
-                  )}
-                </div>
-              </div>
-            )}
 
             {/* PROMO CODES TAB */}
             {activeTab === 'promos' && (

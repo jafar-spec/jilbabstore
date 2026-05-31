@@ -40,8 +40,9 @@ service cloud.firestore {
     // Customers can read their own orders if they are logged in.
     match /orders/{document=**} {
       allow create: if true;
-      allow read: if isAdmin() || (request.auth != null && resource.data.uid == request.auth.uid);
-      allow update, delete: if isAdmin();
+      allow read: if true;
+      allow update: if isAdmin();
+      allow delete: if isAdmin();
     }
 
     // Reviews
