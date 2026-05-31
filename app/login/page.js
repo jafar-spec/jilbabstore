@@ -21,7 +21,7 @@ export default function LoginPage() {
     e.preventDefault();
     
     // Legacy courier login
-    if (password === 'courier123') {
+    if (password === (process.env.NEXT_PUBLIC_COURIER_KEY || 'courier123')) {
       sessionStorage.setItem('store_auth_role', 'courier');
       window.location.href = '/courier';
       return;

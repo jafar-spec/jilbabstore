@@ -1,5 +1,5 @@
 import { Resend } from 'resend';
-import { adminAuth } from '@/lib/firebaseAdmin';
+import { adminAuth, adminDb } from '@/lib/firebaseAdmin';
 
 // Provide a dummy key during build time if environment variables aren't loaded yet
 const resend = new Resend(process.env.RESEND_API_KEY || 're_dummy_key_for_build_purposes');
@@ -22,10 +22,14 @@ export async function POST(req) {
       return new Response(JSON.stringify({ error: 'Unauthorized: Invalid token' }), { status: 401 });
     }
 
-    // 2. We can optionally verify if decodedToken.uid belongs to an admin by checking Firestore,
-    // but the `admin/page.js` route is already checking role. Still, checking here is safer.
-    // For now, any logged-in user with a valid token will pass this basic check. 
-    // Ideally we would do: const adminDoc = await adminDb.collection('admins').doc(decodedToken.uid).get();
+    // 2. Verify user is an admin — not just any logged-in user
+    if (!adminDb) {
+      return new Response(JSON.stringify({ error: 'Server configuration error' }), { status: 500 });
+    }
+    const adminDoc = await adminDb.collection('admins').doc(decodedToken.uid).get();
+    if (!adminDoc.exists) {
+      return new Response(JSON.stringify({ error: 'Forbidden: Admin access required' }), { status: 403 });
+    }
     
     const { to, subject, html } = await req.json();
 

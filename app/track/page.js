@@ -1,7 +1,6 @@
 "use client";
 import { useState } from 'react';
 import { useLanguage } from '@/context/LanguageContext';
-import { getOrderById } from '@/lib/db';
 import Link from 'next/link';
 
 export default function TrackOrder() {
@@ -20,9 +19,15 @@ export default function TrackOrder() {
     setOrder(null);
     
     try {
-      const foundOrder = await getOrderById(orderId.trim());
-      if (foundOrder) {
-        setOrder(foundOrder);
+      const res = await fetch('/api/track-order', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ orderId: orderId.trim() })
+      });
+      
+      if (res.ok) {
+        const data = await res.json();
+        setOrder(data);
       } else {
         setError(t('orderNotFound'));
       }
@@ -123,8 +128,8 @@ export default function TrackOrder() {
 
           <div style={{ background: 'var(--bg-color)', padding: '1.5rem', borderRadius: '8px' }}>
             <h3 style={{ marginBottom: '1rem', borderBottom: '1px solid var(--border-color)', paddingBottom: '0.5rem' }}>{t('customerDetails')}</h3>
-            <p><strong>{t('nameLabel') || 'الاسم:'}</strong> {order.customerInfo?.fullName || order.shipping?.fullName}</p>
-            <p><strong>{t('addressLabel') || 'العنوان:'}</strong> {order.customerInfo?.city || order.shipping?.city}, {order.customerInfo?.address || order.shipping?.street}</p>
+            <p><strong>{t('nameLabel') || 'الاسم:'}</strong> {order.customerName}</p>
+            <p><strong>{t('addressLabel') || 'المدينة:'}</strong> {order.city}</p>
             
             {order.trackingId && (
               <div style={{ marginTop: '1.5rem', padding: '1rem', background: '#e8f4f8', borderRadius: '8px', border: '1px solid #bce2f0', display: 'flex', alignItems: 'center', gap: '10px' }}>
