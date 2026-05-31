@@ -97,8 +97,6 @@ export default function CourierDashboard() {
   };
 
   const handleLogout = async () => {
-    const { logout } = require('@/context/AuthContext');
-    // Clear sessionStorage for legacy courier
     if (typeof window !== 'undefined') {
       sessionStorage.removeItem('store_auth_role');
     }
@@ -109,7 +107,7 @@ export default function CourierDashboard() {
     } catch (e) {
       // Legacy courier may not have Firebase auth
     }
-    router.push('/login');
+    window.location.replace('/login');
   };
 
   if (authLoading || loading) {

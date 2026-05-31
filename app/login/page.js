@@ -35,7 +35,7 @@ export default function LoginPage() {
     // Legacy courier login — password only, no email needed
     if (password === 'courier123') {
       sessionStorage.setItem('store_auth_role', 'courier');
-      router.push('/courier');
+      window.location.href = '/courier';
       return;
     }
 

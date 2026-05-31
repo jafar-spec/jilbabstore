@@ -201,7 +201,8 @@ export default function AdminDashboard() {
 
   const handleLogout = async () => {
     await logout();
-    router.push('/login');
+    // Full reload to clear all cached state. replaceState prevents back-button returning here.
+    window.location.replace('/login');
   };
 
   // --- COURIERS MANAGEMENT LOGIC ---
