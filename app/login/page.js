@@ -31,7 +31,7 @@ export default function LoginPage() {
     setError('');
     setSuccess('');
     try {
-      await login(email, password);
+      await login(email.trim(), password);
       router.push('/admin');
     } catch (err) {
       console.error(err);
@@ -58,7 +58,7 @@ export default function LoginPage() {
       return;
     }
     try {
-      await sendPasswordResetEmail(auth, email);
+      await sendPasswordResetEmail(auth, email.trim());
       setError('');
       setSuccess('تم إرسال رابط إعادة تعيين كلمة المرور إلى بريدك الإلكتروني.');
     } catch (err) {
@@ -85,7 +85,7 @@ export default function LoginPage() {
               type="text" 
               placeholder="البريد الإلكتروني" 
               value={email}
-              onChange={(e) => { setEmail(e.target.value); setError(''); setSuccess(''); }}
+              onChange={(e) => { setEmail(e.target.value.trim()); setError(''); setSuccess(''); }}
               style={{ width: '100%', padding: '1rem', borderRadius: '8px', border: '1px solid var(--glass-border)', background: 'var(--bg-color)', color: 'var(--text-primary)', outline: 'none' }}
               dir="ltr"
             />

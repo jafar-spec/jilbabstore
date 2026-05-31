@@ -426,8 +426,28 @@ export default function AdminDashboard() {
 
   const updateOrderStatus = async (orderId, newStatus) => {
     try {
-      await updateOrderDoc(orderId, { status: newStatus });
       const currentOrder = orders.find(o => o.id === orderId);
+
+      // If canceling, restore stock for each item
+      if (newStatus === 'ملغي' && currentOrder && currentOrder.status !== 'ملغي') {
+        try {
+          for (const item of (currentOrder.items || [])) {
+            if (!item.id || !item.selectedSize) continue;
+            const prod = products.find(p => p.id === item.id);
+            if (!prod || !prod.variants) continue;
+            const updatedVariants = prod.variants.map(v =>
+              v.size === item.selectedSize ? { ...v, stock: (v.stock || 0) + (item.quantity || 1) } : v
+            );
+            await updateProduct(item.id, { variants: updatedVariants });
+            setProducts(prev => prev.map(p => p.id === item.id ? { ...p, variants: updatedVariants } : p));
+          }
+          showToast('تم استعادة المخزون تلقائياً', 'info');
+        } catch (stockErr) {
+          console.error('Failed to restore stock:', stockErr);
+        }
+      }
+
+      await updateOrderDoc(orderId, { status: newStatus });
       setOrders(orders.map(order => 
         order.id === orderId ? { ...order, status: newStatus } : order
       ));
@@ -1366,9 +1386,29 @@ export default function AdminDashboard() {
             {/* INVENTORY TAB */}
             {activeTab === 'inventory' && role === 'operator' && (
               <div style={{ background: 'var(--surface-color)', padding: '2rem', borderRadius: '16px', border: '1px solid var(--glass-border)' }}>
-                <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '2rem' }}>
-                  <input type="text" placeholder="ابحث برمز SKU أو المنتج..." value={inventorySearch} onChange={(e) => setInventorySearch(e.target.value)} style={{ width: '400px', padding: '0.8rem', border: '1px solid var(--glass-border)', borderRadius: '8px' }} />
-                  <span style={{ color: 'var(--text-secondary)' }}>إجمالي الأصناف: {products.length}</span>
+                {/* Stock Summary Dashboard */}
+                <div style={{ display: 'flex', gap: '1rem', marginBottom: '1.5rem', flexWrap: 'wrap' }}>
+                  <div style={{ flex: '1', minWidth: '130px', padding: '1rem', borderRadius: '12px', background: 'rgba(40,167,69,0.1)', border: '1px solid rgba(40,167,69,0.2)', textAlign: 'center' }}>
+                    <div style={{ fontSize: '1.5rem', fontWeight: 'bold', color: '#28a745' }}>{allInventoryItems.filter(i => i.stock > 5).length}</div>
+                    <div style={{ fontSize: '0.8rem', color: 'var(--text-secondary)' }}>متوفر</div>
+                  </div>
+                  <div style={{ flex: '1', minWidth: '130px', padding: '1rem', borderRadius: '12px', background: 'rgba(255,193,7,0.1)', border: '1px solid rgba(255,193,7,0.2)', textAlign: 'center' }}>
+                    <div style={{ fontSize: '1.5rem', fontWeight: 'bold', color: '#f5a623' }}>{allInventoryItems.filter(i => i.stock > 0 && i.stock <= 5).length}</div>
+                    <div style={{ fontSize: '0.8rem', color: 'var(--text-secondary)' }}>كمية منخفضة</div>
+                  </div>
+                  <div style={{ flex: '1', minWidth: '130px', padding: '1rem', borderRadius: '12px', background: 'rgba(231,76,60,0.1)', border: '1px solid rgba(231,76,60,0.2)', textAlign: 'center' }}>
+                    <div style={{ fontSize: '1.5rem', fontWeight: 'bold', color: '#e74c3c' }}>{allInventoryItems.filter(i => !i.stock || i.stock === 0).length}</div>
+                    <div style={{ fontSize: '0.8rem', color: 'var(--text-secondary)' }}>نفذت الكمية</div>
+                  </div>
+                  <div style={{ flex: '1', minWidth: '130px', padding: '1rem', borderRadius: '12px', background: 'rgba(52,152,219,0.1)', border: '1px solid rgba(52,152,219,0.2)', textAlign: 'center' }}>
+                    <div style={{ fontSize: '1.5rem', fontWeight: 'bold', color: '#3498db' }}>{allInventoryItems.reduce((sum, i) => sum + (i.stock || 0), 0)}</div>
+                    <div style={{ fontSize: '0.8rem', color: 'var(--text-secondary)' }}>إجمالي القطع</div>
+                  </div>
+                </div>
+
+                <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '1.5rem', gap: '1rem', flexWrap: 'wrap', alignItems: 'center' }}>
+                  <input type="text" placeholder="🔍 ابحث برمز SKU أو اسم المنتج..." value={inventorySearch} onChange={(e) => setInventorySearch(e.target.value)} style={{ flex: '1', minWidth: '250px', padding: '0.8rem 1.2rem', border: '1px solid var(--glass-border)', borderRadius: '8px', background: 'var(--bg-color)', color: 'var(--text-primary)' }} />
+                  <span style={{ color: 'var(--text-secondary)', display: 'flex', alignItems: 'center', gap: '0.5rem' }}><i className="fa-solid fa-boxes-stacked"></i> إجمالي الأصناف: {allInventoryItems.length}</span>
                 </div>
 
                 {filteredInventory.length === 0 ? (
@@ -1377,38 +1417,44 @@ export default function AdminDashboard() {
                   <div style={{ overflowX: 'auto' }}>
                     <table style={{ width: '100%', borderCollapse: 'collapse', minWidth: '900px' }}>
                       <thead>
-                        <tr style={{ borderBottom: '1px solid var(--glass-border)', textAlign: 'right', color: 'var(--text-secondary)' }}>
+                        <tr style={{ borderBottom: '2px solid var(--glass-border)', textAlign: 'right', color: 'var(--text-secondary)', fontSize: '0.85rem' }}>
                           <th style={{ padding: '1rem' }}>الصورة</th>
-                          <th style={{ padding: '1rem' }}>التفاصيل</th>
+                          <th style={{ padding: '1rem' }}>المنتج / المقاس</th>
                           <th style={{ padding: '1rem' }}>SKU</th>
                           <th style={{ padding: '1rem' }}>السعر</th>
-                          <th style={{ padding: '1rem' }}>الكمية</th>
+                          <th style={{ padding: '1rem' }}>المخزون</th>
+                          <th style={{ padding: '1rem' }}>الحالة</th>
+                          <th style={{ padding: '1rem' }}>إجراءات</th>
                         </tr>
                       </thead>
                       <tbody>
                         {filteredInventory.map(product => {
                           const primaryImg = (product.images && product.images.length > 0) ? product.images[0] : (product.image || '/assets/black_jilbab_1779926556174.png');
+                          const stockLevel = product.stock || 0;
+                          const stockColor = stockLevel === 0 ? '#e74c3c' : stockLevel <= 5 ? '#f5a623' : '#28a745';
+                          const stockBg = stockLevel === 0 ? 'rgba(231,76,60,0.1)' : stockLevel <= 5 ? 'rgba(255,193,7,0.1)' : 'rgba(40,167,69,0.1)';
+                          const stockLabel = stockLevel === 0 ? 'نفذت' : stockLevel <= 5 ? 'منخفض' : 'متوفر';
                           return (
                             <tr key={product.sku || product.baseId} style={{ borderBottom: '1px solid var(--glass-border)' }}>
-                              <td style={{ padding: '1rem' }}><img src={primaryImg} alt="" style={{ width: '50px', height: '50px', objectFit: 'cover', borderRadius: '4px' }} /></td>
+                              <td style={{ padding: '1rem' }}><img src={primaryImg} alt="" style={{ width: '50px', height: '50px', objectFit: 'cover', borderRadius: '8px' }} /></td>
                               <td style={{ padding: '1rem' }}>
                                 <strong>{product.title}</strong><br/>
-                                <span style={{ fontSize: '0.8rem' }}>المقاس: <span style={{color: 'var(--accent-color)'}}>{product.size || 'عام'}</span></span>
+                                <span style={{ fontSize: '0.8rem', padding: '2px 8px', borderRadius: '10px', background: 'rgba(108,92,231,0.1)', color: '#6c5ce7' }}>{product.size || 'عام'}</span>
                               </td>
-                              <td style={{ padding: '1rem' }}>{product.sku || 'N/A'}</td>
-                              <td style={{ padding: '1rem' }}>₪{Number(product.price).toFixed(2)}</td>
+                              <td style={{ padding: '1rem', fontFamily: 'monospace', fontSize: '0.85rem' }}>{product.sku || 'N/A'}</td>
+                              <td style={{ padding: '1rem', fontWeight: '600' }}>₪{Number(product.price).toFixed(2)}</td>
                               <td style={{ padding: '1rem' }}>
                                 <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                                  <button onClick={() => updateProductStock(product.baseId, product.sku, (product.stock || 0) - 1)} style={{ width: '30px', height: '30px', borderRadius: '50%', border: '1px solid #ccc' }}>-</button>
-                                  <span>{product.stock || 0}</span>
-                                  <button onClick={() => updateProductStock(product.baseId, product.sku, (product.stock || 0) + 1)} style={{ width: '30px', height: '30px', borderRadius: '50%', border: '1px solid #ccc' }}>+</button>
-                                  <button onClick={() => deleteProduct(product.baseId)} style={{ color: 'red', background: 'none', border: 'none', marginRight: '1rem', cursor: 'pointer' }}><i className="fa-solid fa-trash"></i></button>
+                                  <button onClick={() => updateProductStock(product.baseId, product.sku, Math.max(0, stockLevel - 1))} style={{ width: '32px', height: '32px', borderRadius: '8px', border: '1px solid #ccc', background: 'var(--bg-color)', cursor: 'pointer', fontWeight: 'bold', fontSize: '1.1rem' }}>−</button>
+                                  <input type="number" min="0" value={stockLevel} onChange={(e) => updateProductStock(product.baseId, product.sku, Math.max(0, parseInt(e.target.value) || 0))} style={{ width: '60px', textAlign: 'center', padding: '0.4rem', borderRadius: '8px', border: `2px solid ${stockColor}`, fontWeight: 'bold', fontSize: '1rem', background: stockBg, color: stockColor }} />
+                                  <button onClick={() => updateProductStock(product.baseId, product.sku, stockLevel + 1)} style={{ width: '32px', height: '32px', borderRadius: '8px', border: '1px solid #ccc', background: 'var(--bg-color)', cursor: 'pointer', fontWeight: 'bold', fontSize: '1.1rem' }}>+</button>
                                 </div>
-                                {product.stock === 0 ? (
-                                  <div style={{ marginTop: '0.5rem', display: 'inline-block', padding: '0.2rem 0.5rem', background: '#ffebee', color: '#c62828', borderRadius: '4px', fontSize: '0.8rem', fontWeight: 'bold' }}>نفذت الكمية</div>
-                                ) : product.stock < 5 ? (
-                                  <div style={{ marginTop: '0.5rem', display: 'inline-block', padding: '0.2rem 0.5rem', background: '#fff8e1', color: '#f57f17', borderRadius: '4px', fontSize: '0.8rem', fontWeight: 'bold' }}>كمية منخفضة</div>
-                                ) : null}
+                              </td>
+                              <td style={{ padding: '1rem' }}>
+                                <span style={{ padding: '4px 12px', borderRadius: '20px', fontSize: '0.8rem', fontWeight: '700', background: stockBg, color: stockColor }}>{stockLabel}</span>
+                              </td>
+                              <td style={{ padding: '1rem' }}>
+                                <button onClick={() => deleteProduct(product.baseId)} style={{ color: '#e74c3c', background: 'rgba(231,76,60,0.1)', border: 'none', padding: '8px 12px', borderRadius: '8px', cursor: 'pointer', fontWeight: '600', fontSize: '0.8rem' }}><i className="fa-solid fa-trash"></i> حذف</button>
                               </td>
                             </tr>
                           );
