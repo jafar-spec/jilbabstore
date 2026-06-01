@@ -11,17 +11,22 @@ function SearchContent() {
   const query = searchParams.get('q') || '';
   const [products, setProducts] = useState([]);
   const [filtered, setFiltered] = useState([]);
+  const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    try {
-      const localProducts = JSON.parse(localStorage.getItem('store_products') || '[]');
-      setProducts(localProducts);
-    } catch (error) {
-      setProducts([]);
-    }
+    import('@/lib/db').then(({ getProducts }) => {
+      getProducts().then((data) => {
+        setProducts(data);
+        setLoading(false);
+      }).catch((err) => {
+        console.error("Failed to load products for search", err);
+        setLoading(false);
+      });
+    });
   }, []);
 
   useEffect(() => {
+    if (loading) return;
     if (query) {
       const lowerQuery = query.toLowerCase();
       setFiltered(products.filter(p => 
@@ -32,17 +37,24 @@ function SearchContent() {
     } else {
       setFiltered(products);
     }
-  }, [query, products]);
+  }, [query, products, loading]);
 
   return (
     <main>
       
       <div style={{ paddingTop: '100px', minHeight: '60vh' }}>
-        <ProductGrid 
-          title={`نتائج البحث عن: "${query}"`} 
-          products={filtered} 
-          emptyMessage="عذراً، لم نتمكن من العثور على منتجات مطابقة لبحثك." 
-        />
+        {loading ? (
+          <div style={{ textAlign: 'center', padding: '4rem', color: 'var(--text-secondary)' }}>
+            <i className="fa-solid fa-circle-notch fa-spin" style={{ fontSize: '2rem', marginBottom: '1rem' }}></i>
+            <p>جاري البحث...</p>
+          </div>
+        ) : (
+          <ProductGrid 
+            title={`نتائج البحث عن: "${query}"`} 
+            products={filtered} 
+            emptyMessage="عذراً، لم نتمكن من العثور على منتجات مطابقة لبحثك." 
+          />
+        )}
       </div>
       
       

@@ -2,12 +2,13 @@
 import Link from 'next/link';
 import { useLanguage } from '@/context/LanguageContext';
 import { useEffect, useState } from 'react';
-import { usePathname } from 'next/navigation';
+import { usePathname, useRouter } from 'next/navigation';
 
 export default function CategorySidebar({ isOpen, onClose, sections = [] }) {
   const { t, lang } = useLanguage();
   const [mounted, setMounted] = useState(false);
   const pathname = usePathname();
+  const router = useRouter();
 
   useEffect(() => {
     setMounted(true);
@@ -50,7 +51,8 @@ export default function CategorySidebar({ isOpen, onClose, sections = [] }) {
               e.preventDefault();
               const q = e.target.q.value;
               if (q.trim()) {
-                window.location.href = `/search?q=${encodeURIComponent(q)}`;
+                router.push(`/search?q=${encodeURIComponent(q)}`);
+                onClose();
               }
             }} style={{ display: 'flex', borderBottom: '1.5px solid var(--text-secondary)' }}>
               <input 
