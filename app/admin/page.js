@@ -148,7 +148,8 @@ export default function AdminDashboard() {
     subsectionId: '',
     category: '',
     lowStockThreshold: 5,
-    variants: [] // Array of { size, stock, sku, reserved }
+    colors: [], // Array of { name, hex, images: [] }
+    variants: [] // Array of { color, size, stock, sku, reserved }
   });
   const [editingProductId, setEditingProductId] = useState(null);
 
@@ -475,27 +476,100 @@ export default function AdminDashboard() {
     }));
   };
 
-  const addVariant = (size) => {
-    if (!newProduct.variants.find(v => v.size === size)) {
+  // Variants are keyed by (color, size). color === '' for products with no
+  // colour dimension (backward compatible).
+  const sameVariant = (v, color, size) => (v.color || '') === (color || '') && v.size === size;
+
+  const addVariant = (color, size) => {
+    setNewProduct(prev => prev.variants.find(v => sameVariant(v, color, size))
+      ? prev
+      : { ...prev, variants: [...prev.variants, { color: color || '', size, stock: 1 }] });
+  };
+
+  const updateVariantStock = (color, size, newStock) => {
+    setNewProduct(prev => ({
+      ...prev,
+      variants: prev.variants.map(v => sameVariant(v, color, size) ? { ...v, stock: parseInt(newStock) || 0 } : v)
+    }));
+  };
+
+  const removeVariant = (color, size) => {
+    setNewProduct(prev => ({
+      ...prev,
+      variants: prev.variants.filter(v => !sameVariant(v, color, size))
+    }));
+  };
+
+  // --- Colour handlers ---
+  const addColor = () => setNewProduct(prev => ({ ...prev, colors: [...(prev.colors || []), { name: '', hex: '#000000', images: [] }] }));
+
+  const updateColor = (i, patch) => setNewProduct(prev => {
+    const colors = prev.colors.map((c, idx) => idx === i ? { ...c, ...patch } : c);
+    let variants = prev.variants;
+    // Renaming a colour cascades to its variants so they stay linked.
+    if (patch.name !== undefined) {
+      const oldName = prev.colors[i].name;
+      variants = prev.variants.map(v => (v.color || '') === (oldName || '') ? { ...v, color: patch.name } : v);
+    }
+    return { ...prev, colors, variants };
+  });
+
+  const removeColor = (i) => setNewProduct(prev => {
+    const name = prev.colors[i].name;
+    return {
+      ...prev,
+      colors: prev.colors.filter((_, idx) => idx !== i),
+      variants: prev.variants.filter(v => (v.color || '') !== (name || ''))
+    };
+  });
+
+  const handleColorImageUpload = async (i, e) => {
+    const files = Array.from(e.target.files || []);
+    if (files.length === 0) return;
+    try {
+      const compressed = await Promise.all(files.map(f => compressImage(f)));
+      const urls = (await Promise.all(compressed.map(d => uploadDataUrl(d, 'products')))).filter(Boolean);
       setNewProduct(prev => ({
         ...prev,
-        variants: [...prev.variants, { size, stock: 1 }]
+        colors: prev.colors.map((c, idx) => idx === i ? { ...c, images: [...(c.images || []), ...urls] } : c)
       }));
+    } catch (err) {
+      console.error('Color image upload failed', err);
+      showToast('فشل رفع صورة اللون', 'error');
     }
   };
 
-  const updateVariantStock = (size, newStock) => {
-    setNewProduct(prev => ({
-      ...prev,
-      variants: prev.variants.map(v => v.size === size ? { ...v, stock: parseInt(newStock) || 0 } : v)
-    }));
-  };
+  const removeColorImage = (i, imgIdx) => setNewProduct(prev => ({
+    ...prev,
+    colors: prev.colors.map((c, idx) => idx === i ? { ...c, images: c.images.filter((_, j) => j !== imgIdx) } : c)
+  }));
 
-  const removeVariant = (size) => {
-    setNewProduct(prev => ({
-      ...prev,
-      variants: prev.variants.filter(v => v.size !== size)
-    }));
+  // Size + stock grid for a given colour ('' = no-colour product).
+  const renderSizeGrid = (color) => {
+    const rows = newProduct.variants.filter(v => (v.color || '') === (color || ''));
+    return (
+      <div style={{ marginTop: '0.75rem' }}>
+        <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap', marginBottom: '0.5rem' }}>
+          {availableSizes.map(size => (
+            <button type="button" key={size} onClick={() => addVariant(color, size)} style={{ padding: '0.35rem 0.9rem', borderRadius: '20px', border: '1px solid var(--accent-color)', background: 'transparent', cursor: 'pointer', color: 'var(--text-primary)', fontSize: '0.85rem' }}>+ {size}</button>
+          ))}
+        </div>
+        {rows.length > 0 && (
+          <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+            <thead><tr style={{ borderBottom: '1px solid #ccc', textAlign: 'right' }}><th>المقاس</th><th>الكمية</th><th>إزالة</th></tr></thead>
+            <tbody>
+              {rows.map((v, idx) => (
+                <tr key={idx}>
+                  <td style={{ padding: '0.4rem 0' }}><strong>{v.size}</strong></td>
+                  <td><input type="number" min="0" value={v.stock} onChange={e => updateVariantStock(color, v.size, e.target.value)} style={{ width: '80px', padding: '0.35rem', borderRadius: '4px', border: '1px solid #ccc' }} /></td>
+                  <td><button type="button" aria-label={`إزالة ${v.size}`} onClick={() => removeVariant(color, v.size)} style={{ background: 'none', color: 'red', border: 'none', cursor: 'pointer' }}><i className="fa-solid fa-times"></i></button></td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        )}
+      </div>
+    );
   };
 
   // Build a lowercased search blob so search can match title, category,
@@ -507,6 +581,8 @@ export default function AdminDashboard() {
       prod.title, prod.category, prod.description,
       section?.title_en, section?.title_ar,
       sub?.name_en, sub?.name_ar,
+      ...(prod.colors || []).map(c => c.name),
+      ...variants.map(v => v.color),
       ...variants.map(v => v.size),
       ...variants.map(v => v.sku)
     ];
@@ -515,7 +591,7 @@ export default function AdminDashboard() {
 
   const resetProductForm = () => {
     setEditingProductId(null);
-    setNewProduct({ title: '', price: '', images: [], description: '', sectionId: sections[0]?.id || '', subsectionId: '', category: '', lowStockThreshold: 5, variants: [] });
+    setNewProduct({ title: '', price: '', images: [], description: '', sectionId: sections[0]?.id || '', subsectionId: '', category: '', lowStockThreshold: 5, colors: [], variants: [] });
     if (fileInputRef.current) fileInputRef.current.value = "";
   };
 
@@ -530,7 +606,8 @@ export default function AdminDashboard() {
       subsectionId: prod.subsectionId || '',
       category: prod.category || '',
       lowStockThreshold: prod.lowStockThreshold ?? 5,
-      variants: (prod.variants || []).map(v => ({ size: v.size, stock: v.stock, sku: v.sku, reserved: v.reserved || 0 }))
+      colors: (prod.colors || []).map(c => ({ name: c.name || '', hex: c.hex || '#000000', images: c.images || [] })),
+      variants: (prod.variants || []).map(v => ({ color: v.color || '', size: v.size, stock: v.stock, sku: v.sku, reserved: v.reserved || 0 }))
     });
     setActiveTab('products');
     if (typeof window !== 'undefined') window.scrollTo({ top: 0, behavior: 'smooth' });
@@ -555,12 +632,19 @@ export default function AdminDashboard() {
       const skuBase = editingProductId
         ? String(editingProductId).slice(0, 6).toUpperCase()
         : `JS${Math.floor(Math.random() * 900000) + 100000}`;
+      const tok = (s) => String(s || '').toUpperCase().replace(/\s+/g, '');
       const variantsWithSku = newProduct.variants.map(v => ({
+        color: v.color || '',
         size: v.size,
         stock: Number(v.stock) || 0,
         reserved: Number(v.reserved) || 0,
-        sku: v.sku || `${skuBase}-${String(v.size).toUpperCase().replace(/\s+/g, '')}`
+        // SKU includes colour so each colour+size is uniquely addressable.
+        sku: v.sku || `${skuBase}-${v.color ? tok(v.color) + '-' : ''}${tok(v.size)}`
       }));
+
+      const colors = (newProduct.colors || [])
+        .filter(c => c.name && c.name.trim())
+        .map(c => ({ name: c.name.trim(), hex: c.hex || '', images: c.images || [] }));
 
       const productDoc = {
         title: newProduct.title,
@@ -572,6 +656,7 @@ export default function AdminDashboard() {
         category: newProduct.category || '',
         lowStockThreshold: Number(newProduct.lowStockThreshold) || 5,
         isNewArrival: true,
+        colors,
         variants: variantsWithSku
       };
       productDoc.searchText = buildSearchText(productDoc, variantsWithSku);
@@ -916,7 +1001,7 @@ export default function AdminDashboard() {
           const stock = Number(v.stock) || 0;
           const reserved = Number(v.reserved) || 0;
           return {
-            ...p, size: v.size, sku: v.sku, stock, reserved,
+            ...p, color: v.color || '', size: v.size, sku: v.sku, stock, reserved,
             available: stock - reserved,
             threshold: Number(p.lowStockThreshold) || 5,
             baseId: p.id
@@ -1697,6 +1782,7 @@ export default function AdminDashboard() {
                               <td style={{ padding: '1rem' }}>
                                 <strong>{product.title}</strong><br/>
                                 <span style={{ fontSize: '0.8rem', padding: '2px 8px', borderRadius: '10px', background: 'rgba(108,92,231,0.1)', color: '#6c5ce7' }}>{product.size || 'عام'}</span>
+                                {product.color && <span style={{ fontSize: '0.8rem', padding: '2px 8px', borderRadius: '10px', background: 'rgba(0,0,0,0.06)', color: 'var(--text-primary)', marginInlineStart: '6px' }}>{product.color}</span>}
                                 {reserved > 0 && <span style={{ fontSize: '0.75rem', marginInlineStart: '6px', color: 'var(--text-secondary)' }}>محجوز: {reserved}</span>}
                               </td>
                               <td style={{ padding: '1rem', fontFamily: 'monospace', fontSize: '0.85rem' }}>{product.sku || 'N/A'}</td>
@@ -1802,40 +1888,47 @@ export default function AdminDashboard() {
                       </div>
                     </div>
 
-                    {/* Variant & Stock Configurator */}
+                    {/* Colours (optional) */}
                     <div style={{ background: 'var(--bg-color)', padding: '1.5rem', borderRadius: '8px', border: '1px solid var(--glass-border)' }}>
-                      <label className="admin-label" style={{ marginBottom: '1rem' }}>إضافة المقاسات والكميات</label>
-                      <div style={{ display: 'flex', gap: '10px', flexWrap: 'wrap', marginBottom: '1rem' }}>
-                        {availableSizes.map(size => (
-                          <button type="button" key={size} onClick={() => addVariant(size)} style={{ padding: '0.4rem 1rem', borderRadius: '20px', border: '1px solid var(--accent-color)', background: 'transparent', cursor: 'pointer', color: 'var(--text-primary)' }}>+ {size}</button>
-                        ))}
+                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.25rem' }}>
+                        <label className="admin-label" style={{ margin: 0 }}>الألوان (اختياري)</label>
+                        <button type="button" onClick={addColor} style={{ padding: '0.4rem 1rem', borderRadius: '20px', border: '1px solid var(--accent-color)', background: 'transparent', cursor: 'pointer', color: 'var(--accent-color)', fontWeight: 600 }}>+ إضافة لون</button>
                       </div>
+                      <p style={{ fontSize: '0.8rem', color: 'var(--text-secondary)', marginTop: 0 }}>أضف ألواناً إذا كان المنتج متوفراً بأكثر من لون. لكل لون صوره ومقاساته وكمياته الخاصة. اتركها فارغة لمنتج بلون واحد.</p>
 
-                      {newProduct.variants.length > 0 && (
-                        <table style={{ width: '100%', marginTop: '1rem', borderCollapse: 'collapse' }}>
-                          <thead>
-                            <tr style={{ borderBottom: '1px solid #ccc', textAlign: 'right' }}>
-                              <th>المقاس</th>
-                              <th>الكمية المتوفرة (Stock)</th>
-                              <th>إزالة</th>
-                            </tr>
-                          </thead>
-                          <tbody>
-                            {newProduct.variants.map((variant, idx) => (
-                              <tr key={idx}>
-                                <td style={{ padding: '0.5rem 0' }}><strong>{variant.size}</strong></td>
-                                <td>
-                                  <input type="number" min="0" value={variant.stock} onChange={e => updateVariantStock(variant.size, e.target.value)} style={{ width: '80px', padding: '0.4rem', borderRadius: '4px', border: '1px solid #ccc' }} />
-                                </td>
-                                <td>
-                                  <button type="button" onClick={() => removeVariant(variant.size)} style={{ background: 'none', color: 'red', border: 'none', cursor: 'pointer' }}><i className="fa-solid fa-times"></i></button>
-                                </td>
-                              </tr>
-                            ))}
-                          </tbody>
-                        </table>
-                      )}
+                      {(newProduct.colors || []).map((c, i) => (
+                        <div key={i} style={{ border: '1px solid var(--border-color)', borderRadius: '10px', padding: '1rem', marginBottom: '1rem' }}>
+                          <div style={{ display: 'flex', gap: '0.75rem', alignItems: 'center', flexWrap: 'wrap' }}>
+                            <input type="text" placeholder="اسم اللون (مثال: أسود)" value={c.name} onChange={e => updateColor(i, { name: e.target.value })} className="admin-input" style={{ flex: '1 1 180px' }} />
+                            <input type="color" aria-label="عينة اللون" value={c.hex || '#000000'} onChange={e => updateColor(i, { hex: e.target.value })} title="عيّنة اللون" style={{ width: '46px', height: '40px', border: 'none', background: 'none', cursor: 'pointer' }} />
+                            <label style={{ padding: '0.5rem 1rem', borderRadius: '8px', border: '1px dashed var(--border-color)', cursor: 'pointer', color: 'var(--text-primary)' }}>
+                              <i className="fa-solid fa-image"></i> صور اللون
+                              <input type="file" multiple accept="image/*" onChange={e => handleColorImageUpload(i, e)} style={{ display: 'none' }} />
+                            </label>
+                            <button type="button" aria-label="حذف اللون" onClick={() => removeColor(i)} style={{ color: '#e74c3c', background: 'rgba(231,76,60,0.1)', border: 'none', borderRadius: '8px', padding: '0.5rem 0.8rem', cursor: 'pointer' }}><i className="fa-solid fa-trash"></i></button>
+                          </div>
+                          {c.images?.length > 0 && (
+                            <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap', marginTop: '0.75rem' }}>
+                              {c.images.map((img, j) => (
+                                <div key={j} style={{ position: 'relative', width: '64px', height: '64px' }}>
+                                  <img src={img} alt="" style={{ width: '64px', height: '64px', objectFit: 'cover', borderRadius: '6px' }} />
+                                  <button type="button" aria-label="حذف الصورة" onClick={() => removeColorImage(i, j)} style={{ position: 'absolute', top: -6, right: -6, background: 'red', color: '#fff', border: 'none', borderRadius: '50%', width: 20, height: 20, cursor: 'pointer' }}>×</button>
+                                </div>
+                              ))}
+                            </div>
+                          )}
+                          {renderSizeGrid(c.name)}
+                        </div>
+                      ))}
                     </div>
+
+                    {/* Sizes & stock — only for products with no colours */}
+                    {(newProduct.colors || []).length === 0 && (
+                      <div style={{ background: 'var(--bg-color)', padding: '1.5rem', borderRadius: '8px', border: '1px solid var(--glass-border)' }}>
+                        <label className="admin-label" style={{ marginBottom: '1rem' }}>إضافة المقاسات والكميات</label>
+                        {renderSizeGrid('')}
+                      </div>
+                    )}
 
                     <div>
                       <label className="admin-label">وصف المنتج</label>

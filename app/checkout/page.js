@@ -333,6 +333,7 @@ export default function Checkout() {
       const payloadItems = cart.map(item => ({
         id: item.id,
         selectedSize: item.selectedSize,
+        selectedColor: item.selectedColor || '',
         sku: item.sku || null,
         quantity: item.quantity
       }));
@@ -452,12 +453,12 @@ export default function Checkout() {
             {step === 1 && (
               <form onSubmit={handleNextStep} style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
                 {!user && (
-                  <input required type="email" name="email" placeholder={t('email')} value={formData.email || ''} onChange={handleInputChange} style={inputStyle} />
+                  <input required type="email" name="email" aria-label={t('email')} placeholder={t('email')} value={formData.email || ''} onChange={handleInputChange} style={inputStyle} />
                 )}
-                <input required type="text" name="fullName" placeholder={t('fullName')} value={formData.fullName} onChange={handleInputChange} style={inputStyle} />
-                <input required type="tel" name="phone" placeholder={t('phone')} value={formData.phone} onChange={handleInputChange} style={inputStyle} />
-                <input required type="text" name="city" placeholder={t('city')} value={formData.city} onChange={handleInputChange} style={inputStyle} />
-                <textarea required name="address" placeholder={t('address')} value={formData.address} onChange={handleInputChange} style={{ ...inputStyle, minHeight: '100px' }}></textarea>
+                <input required type="text" name="fullName" aria-label={t('fullName')} placeholder={t('fullName')} value={formData.fullName} onChange={handleInputChange} style={inputStyle} />
+                <input required type="tel" name="phone" aria-label={t('phone')} placeholder={t('phone')} value={formData.phone} onChange={handleInputChange} style={inputStyle} />
+                <input required type="text" name="city" aria-label={t('city')} placeholder={t('city')} value={formData.city} onChange={handleInputChange} style={inputStyle} />
+                <textarea required name="address" aria-label={t('address')} placeholder={t('address')} value={formData.address} onChange={handleInputChange} style={{ ...inputStyle, minHeight: '100px' }}></textarea>
                 <button type="submit" className="btn-primary" style={{ marginTop: '1rem', padding: '1rem' }}>{t('next')}</button>
               </form>
             )}

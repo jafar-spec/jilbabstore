@@ -62,23 +62,24 @@ export default function CartSidebar() {
             </div>
           ) : (
             cart.map((item) => (
-              <div className="cart-item" key={`${item.id}-${item.selectedSize}`}>
+              <div className="cart-item" key={`${item.id}-${item.selectedSize}-${item.selectedColor || ''}`}>
                 <div className="cart-item-image" style={{ position: 'relative', width: '80px', height: '100px' }}>
-                  <Image 
-                    src={item.image || '/assets/black_jilbab_1779926556174.png'} 
-                    alt={item.title} 
+                  <Image
+                    src={item.image || '/assets/black_jilbab_1779926556174.png'}
+                    alt={item.title}
                     fill
                     style={{ objectFit: 'cover' }}
                   />
                 </div>
                 <div className="item-details">
                   <div className="item-title">{item.title}</div>
-                  <div style={{ fontSize: '0.8rem', color: 'var(--text-secondary)' }}>
+                  <div style={{ fontSize: '0.8rem', color: 'var(--text-secondary)', display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
                     {item.selectedSize !== 'عام' && <span>{t('size')} {item.selectedSize}</span>}
+                    {item.selectedColor && <span>• {item.selectedColor}</span>}
                   </div>
                   <div className="item-price">{Number(item.price).toFixed(2)} {t('price')} x {item.quantity}</div>
                 </div>
-                <button className="remove-item" onClick={() => removeFromCart(item.id, item.selectedSize)} aria-label="Remove item">
+                <button className="remove-item" onClick={() => removeFromCart(item.id, item.selectedSize, item.selectedColor)} aria-label={`Remove ${item.title}`}>
                   <i className="fa-solid fa-trash-can"></i>
                 </button>
               </div>

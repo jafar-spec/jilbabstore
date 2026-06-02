@@ -188,8 +188,10 @@ export default function ProductGrid({ title, products, subsections = [], emptyMe
                         style={{ objectFit: 'cover' }}
                       />
                     </Link>
-                    <button 
+                    <button
                       onClick={(e) => { e.preventDefault(); toggleWishlist(product); }}
+                      aria-label={isInWishlist(product.id) ? `إزالة ${product.title} من المفضلة` : `إضافة ${product.title} إلى المفضلة`}
+                      aria-pressed={isInWishlist(product.id)}
                       style={{ position: 'absolute', top: '10px', right: '10px', background: '#fff', border: 'none', borderRadius: '50%', width: '40px', height: '40px', display: 'flex', justifyContent: 'center', alignItems: 'center', cursor: 'pointer', boxShadow: '0 2px 5px rgba(0,0,0,0.1)', zIndex: 10 }}
                     >
                       <i className={isInWishlist(product.id) ? "fa-solid fa-heart" : "fa-regular fa-heart"} style={{ color: isInWishlist(product.id) ? '#e74c3c' : 'var(--text-secondary)', fontSize: '1.2rem', transition: 'all 0.3s' }}></i>

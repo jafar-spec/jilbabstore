@@ -131,6 +131,7 @@ export async function POST(req) {
           price,
           quantity: qty,
           selectedSize: item.selectedSize || 'عام',
+          selectedColor: item.selectedColor || '',
           sku: (variants.find(v => v.sku === item.sku || v.size === item.selectedSize) || {}).sku || null,
           image: data.images?.[0] || item.image || null
         });

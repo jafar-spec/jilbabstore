@@ -40,6 +40,7 @@ export default function RootLayout({ children }) {
         <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" />
       </head>
       <body>
+        <a href="#main-content" className="skip-link">تخطّ إلى المحتوى</a>
         <Suspense fallback={null}>
           <Analytics />
         </Suspense>
@@ -49,7 +50,9 @@ export default function RootLayout({ children }) {
               <CartProvider>
                 <WishlistProvider>
                   <ClientWrapper>
-                    {children}
+                    <div id="main-content" tabIndex={-1} style={{ outline: 'none' }}>
+                      {children}
+                    </div>
                   </ClientWrapper>
                   <CookieConsent />
                 </WishlistProvider>

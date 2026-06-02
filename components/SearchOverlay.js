@@ -93,8 +93,9 @@ export default function SearchOverlay({ isOpen, onClose }) {
         transition: 'transform 0.4s cubic-bezier(0.16, 1, 0.3, 1)'
       }}>
         <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: '1rem' }}>
-          <button 
+          <button
             onClick={onClose}
+            aria-label="إغلاق البحث"
             style={{ background: 'transparent', border: 'none', fontSize: '1.8rem', cursor: 'pointer', color: 'var(--text-secondary)', transition: 'color 0.2s' }}
             onMouseOver={(e) => e.target.style.color = 'var(--text-primary)'}
             onMouseOut={(e) => e.target.style.color = 'var(--text-secondary)'}
@@ -115,11 +116,12 @@ export default function SearchOverlay({ isOpen, onClose }) {
             style={{ position: 'relative', marginBottom: '2rem', flexShrink: 0 }}
           >
             <i className="fa-solid fa-magnifying-glass" style={{ position: 'absolute', top: '50%', transform: 'translateY(-50%)', left: lang === 'en' ? '20px' : 'auto', right: lang === 'ar' ? '20px' : 'auto', fontSize: '1.5rem', color: 'var(--accent-color)' }}></i>
-            <input 
+            <input
               ref={inputRef}
               type="text"
               value={query}
               onChange={(e) => setQuery(e.target.value)}
+              aria-label={t('searchPlaceholder') || 'ابحث عن المنتجات'}
               placeholder={t('searchPlaceholder') || "ابحث عن المنتجات..."}
               style={{
                 width: '100%',

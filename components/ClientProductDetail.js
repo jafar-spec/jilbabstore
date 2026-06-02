@@ -20,6 +20,7 @@ export default function ClientProductDetail({ initialProduct, initialReviews, re
   const [loading, setLoading] = useState(false);
   const [quantity, setQuantity] = useState(1);
   const [selectedSize, setSelectedSize] = useState(null);
+  const [selectedColor, setSelectedColor] = useState(null);
   
   // Wishlist
   const { toggleWishlist, isInWishlist } = useWishlist();
@@ -43,16 +44,40 @@ export default function ClientProductDetail({ initialProduct, initialReviews, re
   const [mainImage, setMainImage] = useState(defaultImage);
   const [zoomStyle, setZoomStyle] = useState({ display: 'none' });
 
+  const hasColors = Array.isArray(product?.colors) && product.colors.length > 0;
+  // Variants available for the currently selected colour (or all, if no colours).
+  const variantsForColor = hasColors
+    ? (product?.variants || []).filter(v => (v.color || '') === (selectedColor || ''))
+    : (product?.variants || []);
+  const activeColorObj = hasColors ? (product.colors.find(c => c.name === selectedColor) || null) : null;
+  const galleryImages = ((activeColorObj?.images?.length ? activeColorObj.images : product?.images) || []).filter(Boolean);
+  const selectedVariant = (variantsForColor || []).find(v => v.size === selectedSize) || null;
+
   useEffect(() => {
-    if (initialProduct) {
-      if (initialProduct.variants && initialProduct.variants.length > 0) {
-          const inStock = initialProduct.variants.filter(v => v.stock > 0);
-          if(inStock.length > 0) setSelectedSize(inStock[0].size);
-      }
-      recordRecentlyViewed(initialProduct.id);
-      track('view_item', { currency: 'ILS', value: Number(initialProduct.price) || 0, items: [productItem(initialProduct)] });
+    if (!initialProduct) return;
+    const colors = initialProduct.colors || [];
+    if (colors.length > 0) {
+      const firstWithStock = colors.find(c => (initialProduct.variants || []).some(v => (v.color || '') === c.name && v.stock > 0)) || colors[0];
+      setSelectedColor(firstWithStock.name);
+    } else if (initialProduct.variants && initialProduct.variants.length > 0) {
+      const inStock = initialProduct.variants.filter(v => v.stock > 0);
+      if (inStock.length > 0) setSelectedSize(inStock[0].size);
     }
+    recordRecentlyViewed(initialProduct.id);
+    track('view_item', { currency: 'ILS', value: Number(initialProduct.price) || 0, items: [productItem(initialProduct)] });
   }, [initialProduct]);
+
+  // When the colour changes, swap the gallery to that colour's images and
+  // default to its first in-stock size.
+  useEffect(() => {
+    if (!hasColors || !selectedColor) return;
+    const colorObj = product.colors.find(c => c.name === selectedColor);
+    const imgs = ((colorObj?.images?.length ? colorObj.images : product.images) || []).filter(Boolean);
+    if (imgs[0]) setMainImage(imgs[0]);
+    const inStock = (product.variants || []).filter(v => (v.color || '') === selectedColor && v.stock > 0);
+    setSelectedSize(inStock.length ? inStock[0].size : null);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selectedColor]);
 
   if (loading) {
     return <div style={{ minHeight: '80vh', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>{t('loading')}</div>;
@@ -68,23 +93,30 @@ export default function ClientProductDetail({ initialProduct, initialReviews, re
   }
 
   const handleAddToCart = () => {
-      if (product.variants && !selectedSize) {
+      if (hasColors && !selectedColor) {
+          showToast('يرجى اختيار اللون', 'error');
+          return;
+      }
+      if (product.variants && product.variants.length > 0 && !selectedSize) {
           showToast(t('sizeRequired'), 'error');
           return;
       }
-      const selectedVariant = product.variants ? product.variants.find(v => v.size === selectedSize) : null;
-      
+      const selectedVariant = (product.variants || []).find(v =>
+          v.size === selectedSize && (!hasColors || (v.color || '') === selectedColor)
+      );
+
       if (selectedVariant && quantity > selectedVariant.stock) {
           showToast(t('quantityExceedsStock').replace('{count}', selectedVariant.stock), 'error');
           return;
       }
-      
+
       addToCart({
           ...product,
           quantity: quantity,
           selectedSize: selectedSize || 'عام',
+          selectedColor: hasColors ? selectedColor : '',
           sku: selectedVariant ? selectedVariant.sku : null,
-          image: mainImage // Pass the currently selected main image
+          image: mainImage // currently selected main image (colour-specific)
       });
       showToast(t('addedToCart'), 'success');
   };
@@ -194,10 +226,10 @@ export default function ClientProductDetail({ initialProduct, initialReviews, re
             ></div>
           </div>
 
-          {/* Thumbnails */}
-          {product.images && product.images.length > 1 && (
+          {/* Thumbnails (colour-aware) */}
+          {galleryImages.length > 1 && (
             <div style={{ display: 'flex', gap: '1rem', overflowX: 'auto', padding: '0.5rem 0' }}>
-              {product.images.map((img, idx) => (
+              {galleryImages.map((img, idx) => (
                 <div key={idx} style={{ position: 'relative', width: '80px', height: '80px', flexShrink: 0 }}>
                   <Image 
                     src={img} 
@@ -253,12 +285,46 @@ export default function ClientProductDetail({ initialProduct, initialReviews, re
             </p>
           </div>
 
+          {/* Colour Selector */}
+          {hasColors && (
+              <div>
+                  <h3 style={{ fontSize: '1.2rem', marginBottom: '1rem' }}>اللون: <span style={{ fontWeight: 'normal', color: 'var(--text-secondary)' }}>{selectedColor}</span></h3>
+                  <div style={{ display: 'flex', gap: '12px', flexWrap: 'wrap' }}>
+                      {product.colors.map(c => {
+                          const colorHasStock = (product.variants || []).some(v => (v.color || '') === c.name && v.stock > 0);
+                          const isSel = selectedColor === c.name;
+                          return (
+                              <button
+                                  key={c.name}
+                                  type="button"
+                                  onClick={() => setSelectedColor(c.name)}
+                                  title={c.name}
+                                  aria-label={`اللون ${c.name}`}
+                                  aria-pressed={isSel}
+                                  style={{
+                                      display: 'flex', alignItems: 'center', gap: '8px',
+                                      padding: '0.45rem 0.9rem', borderRadius: '999px',
+                                      border: isSel ? '2px solid var(--accent-color)' : '1px solid var(--glass-border)',
+                                      background: 'transparent', cursor: 'pointer',
+                                      opacity: colorHasStock ? 1 : 0.45, fontWeight: isSel ? 'bold' : 'normal',
+                                      color: 'var(--text-primary)'
+                                  }}
+                              >
+                                  <span aria-hidden="true" style={{ width: '16px', height: '16px', borderRadius: '50%', background: c.hex || '#ccc', border: '1px solid rgba(0,0,0,0.2)', display: 'inline-block' }} />
+                                  {c.name}
+                              </button>
+                          );
+                      })}
+                  </div>
+              </div>
+          )}
+
           {/* Size Selector */}
-          {product.variants && product.variants.length > 0 && (
+          {variantsForColor && variantsForColor.length > 0 && (
               <div>
                   <h3 style={{ fontSize: '1.2rem', marginBottom: '1rem' }}>{t('chooseSize')}: {selectedSize && <span style={{fontWeight: 'normal', color: 'var(--text-secondary)'}}>{selectedSize}</span>}</h3>
                   <div style={{ display: 'flex', gap: '10px', flexWrap: 'wrap' }}>
-                      {product.variants.map(variant => {
+                      {variantsForColor.map(variant => {
                           const isOutOfStock = variant.stock <= 0;
                           const isSelected = selectedSize === variant.size;
                           return (
@@ -289,18 +355,12 @@ export default function ClientProductDetail({ initialProduct, initialReviews, re
           {/* Buy Box */}
           <div style={{ background: 'var(--surface-color)', padding: '2rem', borderRadius: '16px', border: '1px solid var(--accent-color)', marginTop: '2rem' }}>
             
-            {product.variants && selectedSize && (
-              (() => {
-                const variant = product.variants.find(v => v.size === selectedSize);
-                if (variant) {
-                  if (variant.stock === 0) {
-                    return <div style={{ marginBottom: '1rem', color: '#c62828', fontWeight: 'bold' }}><i className="fa-solid fa-triangle-exclamation"></i> {t('outOfStock')}</div>;
-                  } else if (variant.stock < 5) {
-                    return <div style={{ marginBottom: '1rem', color: '#f57f17', fontWeight: 'bold' }}><i className="fa-solid fa-clock"></i> {t('onlyLeftInStock').replace('{count}', variant.stock)}</div>;
-                  }
-                }
-                return null;
-              })()
+            {selectedSize && selectedVariant && (
+              selectedVariant.stock === 0
+                ? <div style={{ marginBottom: '1rem', color: '#c62828', fontWeight: 'bold' }}><i className="fa-solid fa-triangle-exclamation"></i> {t('outOfStock')}</div>
+                : selectedVariant.stock < 5
+                  ? <div style={{ marginBottom: '1rem', color: '#f57f17', fontWeight: 'bold' }}><i className="fa-solid fa-clock"></i> {t('onlyLeftInStock').replace('{count}', selectedVariant.stock)}</div>
+                  : null
             )}
 
             <div style={{ display: 'flex', alignItems: 'center', gap: '1rem', marginBottom: '1.5rem' }}>
@@ -320,10 +380,10 @@ export default function ClientProductDetail({ initialProduct, initialReviews, re
               <button 
                 className="btn-primary" 
                 onClick={handleAddToCart}
-                disabled={product.variants && selectedSize && product.variants.find(v => v.size === selectedSize)?.stock === 0}
-                style={{ flex: 1, padding: '1.2rem', fontSize: '1.2rem', borderRadius: '30px', display: 'flex', justifyContent: 'center', alignItems: 'center', gap: '10px', opacity: (product.variants && selectedSize && product.variants.find(v => v.size === selectedSize)?.stock === 0) ? 0.5 : 1, cursor: (product.variants && selectedSize && product.variants.find(v => v.size === selectedSize)?.stock === 0) ? 'not-allowed' : 'pointer' }}
+                disabled={selectedVariant?.stock === 0}
+                style={{ flex: 1, padding: '1.2rem', fontSize: '1.2rem', borderRadius: '30px', display: 'flex', justifyContent: 'center', alignItems: 'center', gap: '10px', opacity: selectedVariant?.stock === 0 ? 0.5 : 1, cursor: selectedVariant?.stock === 0 ? 'not-allowed' : 'pointer' }}
               >
-                <i className="fa-solid fa-cart-plus"></i> {(product.variants && selectedSize && product.variants.find(v => v.size === selectedSize)?.stock === 0) ? t('soldOut') : t('addToCart')}
+                <i className="fa-solid fa-cart-plus"></i> {selectedVariant?.stock === 0 ? t('soldOut') : t('addToCart')}
               </button>
               
               <button 

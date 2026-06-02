@@ -31,10 +31,16 @@ export function CartProvider({ children }) {
     let maxStock = 0;
     
     setCart((prev) => {
-      const existing = prev.find((item) => item.id === product.id && item.selectedSize === product.selectedSize);
-      const requestedVariant = product.variants ? product.variants.find(v => v.size === product.selectedSize) : null;
+      const sameLine = (item) => item.id === product.id
+        && item.selectedSize === product.selectedSize
+        && (item.selectedColor || '') === (product.selectedColor || '');
+      const existing = prev.find(sameLine);
+      // Match the exact variant by SKU when available, else colour+size.
+      const requestedVariant = product.variants
+        ? product.variants.find(v => (product.sku && v.sku === product.sku) || (v.size === product.selectedSize && (v.color || '') === (product.selectedColor || '')))
+        : null;
       maxStock = requestedVariant ? requestedVariant.stock : Infinity;
-      
+
       if (existing) {
         const newQty = existing.quantity + (product.quantity || 1);
         if (newQty > maxStock) {
@@ -42,9 +48,7 @@ export function CartProvider({ children }) {
           return prev;
         }
         return prev.map((item) =>
-          item.id === product.id && item.selectedSize === product.selectedSize 
-            ? { ...item, quantity: newQty } 
-            : item
+          sameLine(item) ? { ...item, quantity: newQty } : item
         );
       }
       
@@ -64,22 +68,22 @@ export function CartProvider({ children }) {
     }
   };
 
-  const updateQuantity = (id, size, newQty, stock) => {
+  const updateQuantity = (id, size, newQty, stock, color = '') => {
     if (newQty > stock) {
       alert(`الكمية المطلوبة تتجاوز المخزون المتاح (${stock})`);
       return;
     }
-    setCart((prev) => 
-      prev.map((item) => 
-        item.id === id && item.selectedSize === size
+    setCart((prev) =>
+      prev.map((item) =>
+        item.id === id && item.selectedSize === size && (item.selectedColor || '') === (color || '')
           ? { ...item, quantity: Math.max(1, newQty) }
           : item
       )
     );
   };
 
-  const removeFromCart = (id, size) => {
-    setCart((prev) => prev.filter((item) => !(item.id === id && item.selectedSize === size)));
+  const removeFromCart = (id, size, color = '') => {
+    setCart((prev) => prev.filter((item) => !(item.id === id && item.selectedSize === size && (item.selectedColor || '') === (color || ''))));
   };
 
   const toggleCart = () => setIsCartOpen(!isCartOpen);
