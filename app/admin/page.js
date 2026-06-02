@@ -24,43 +24,8 @@ import AdminMap from '@/components/AdminMap';
 import { useAuth } from '@/context/AuthContext';
 import { uploadDataUrl } from '@/lib/uploads';
 import { PAGES, PAGE_DEFAULTS } from '@/lib/pageContent';
-
-// Helper function to compress images before saving as Base64 to avoid huge payloads
-const compressImage = (file, maxWidth = 800, maxHeight = 800) => {
-  return new Promise((resolve) => {
-    const reader = new FileReader();
-    reader.onload = (event) => {
-      const img = new window.Image();
-      img.onload = () => {
-        const canvas = document.createElement('canvas');
-        const MAX_WIDTH = maxWidth;
-        const MAX_HEIGHT = maxHeight;
-        let width = img.width;
-        let height = img.height;
-
-        if (width > height) {
-          if (width > MAX_WIDTH) {
-            height *= MAX_WIDTH / width;
-            width = MAX_WIDTH;
-          }
-        } else {
-          if (height > MAX_HEIGHT) {
-            width *= MAX_HEIGHT / height;
-            height = MAX_HEIGHT;
-          }
-        }
-        canvas.width = width;
-        canvas.height = height;
-        const ctx = canvas.getContext('2d');
-        ctx.drawImage(img, 0, 0, width, height);
-        // Compress to 0.7 quality webp
-        resolve(canvas.toDataURL('image/webp', 0.7));
-      };
-      img.src = event.target.result;
-    };
-    reader.readAsDataURL(file);
-  });
-};
+import { compressImage } from '@/lib/imageCompress';
+import EmptyState from '@/components/admin/EmptyState';
 
 export default function AdminDashboard() {
   const router = useRouter();
@@ -3203,9 +3168,3 @@ const navButtonStyle = (isActive) => ({
   width: '100%'
 });
 
-const EmptyState = ({ icon, text }) => (
-  <div style={{ textAlign: 'center', padding: '3rem', color: 'var(--text-secondary)' }}>
-    <i className={`fa-solid ${icon}`} style={{ fontSize: '5rem', marginBottom: '1.5rem', opacity: 0.3 }}></i>
-    <p style={{ fontSize: '1.2rem' }}>{text}</p>
-  </div>
-);

@@ -119,6 +119,7 @@ export default function SearchOverlay({ isOpen, onClose }) {
             <input
               ref={inputRef}
               type="text"
+              data-testid="search-overlay-input"
               value={query}
               onChange={(e) => setQuery(e.target.value)}
               aria-label={t('searchPlaceholder') || 'ابحث عن المنتجات'}

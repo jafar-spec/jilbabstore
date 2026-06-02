@@ -11,6 +11,8 @@
     "build": "next build",
     "start": "next start",
     "lint": "eslint",
+    "test:e2e": "playwright test",
+    "test:e2e:ui": "playwright test --ui",
     "deploy": "npm run build && npx -y firebase-tools@latest deploy --only apphosting --project jilbab-store",
     "deploy:rules": "npx -y firebase-tools@latest deploy --only firestore:rules --project jilbab-store"
   },
@@ -38,6 +40,7 @@
     "xml2js": "^0.6.2"
   },
   "devDependencies": {
+    "@playwright/test": "^1.60.0",
     "@tailwindcss/postcss": "^4",
     "eslint": "^9",
     "eslint-config-next": "16.2.6",

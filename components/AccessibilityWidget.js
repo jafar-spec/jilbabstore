@@ -82,7 +82,7 @@ export default function AccessibilityWidget() {
         style={{
           // Physical left (not inset-inline) so it stays clear of the
           // customer-service widget on the right in this RTL layout.
-          position: 'fixed', bottom: '20px', left: '20px', zIndex: 3000,
+          position: 'fixed', bottom: '20px', left: '20px', zIndex: 4500,
           width: '52px', height: '52px', borderRadius: '50%', border: 'none', cursor: 'pointer',
           background: 'var(--accent-color)', color: '#fff', fontSize: '1.4rem',
           boxShadow: '0 4px 14px rgba(0,0,0,0.25)', display: 'flex', alignItems: 'center', justifyContent: 'center'
@@ -97,7 +97,7 @@ export default function AccessibilityWidget() {
           role="dialog"
           aria-label="إعدادات إمكانية الوصول"
           style={{
-            position: 'fixed', bottom: '84px', left: '20px', zIndex: 3000,
+            position: 'fixed', bottom: '84px', left: '20px', zIndex: 4500,
             width: 'min(300px, calc(100vw - 40px))', background: 'var(--surface-color)',
             border: '1px solid var(--glass-border)', borderRadius: '16px', padding: '1rem',
             boxShadow: '0 12px 40px rgba(0,0,0,0.2)', display: 'flex', flexDirection: 'column', gap: '0.6rem'
