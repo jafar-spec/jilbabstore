@@ -4,6 +4,7 @@ import { useToast } from './ToastContext';
 import { auth, db } from '@/lib/firebase';
 import { onAuthStateChanged } from 'firebase/auth';
 import { doc, getDoc, setDoc } from 'firebase/firestore';
+import { track, productItem } from '@/lib/analytics';
 
 const WishlistContext = createContext();
 
@@ -64,6 +65,7 @@ export const WishlistProvider = ({ children }) => {
   const addToWishlist = (product) => {
     if (wishlist.some(item => item.id === product.id)) return;
     setWishlist(prev => [...prev, product]);
+    track('add_to_wishlist', { currency: 'ILS', value: Number(product.price) || 0, items: [productItem(product)] });
     showToast('تمت الإضافة إلى المفضلة', 'success');
   };
 

@@ -88,8 +88,13 @@ export default function Footer() {
             <li><Link href="/track" style={{ color: 'var(--text-secondary)', textDecoration: 'none', fontSize: '0.95rem', transition: 'var(--transition)' }}>{t('trackOrder')}</Link></li>
             <li><Link href="/wishlist" style={{ color: 'var(--text-secondary)', textDecoration: 'none', fontSize: '0.95rem', transition: 'var(--transition)' }}>{t('wishlist')}</Link></li>
             <li><Link href="/profile" style={{ color: 'var(--text-secondary)', textDecoration: 'none', fontSize: '0.95rem', transition: 'var(--transition)' }}>{t('profile')}</Link></li>
+            <li><Link href="/about" style={{ color: 'var(--text-secondary)', textDecoration: 'none', fontSize: '0.95rem', transition: 'var(--transition)' }}>من نحن</Link></li>
+            <li><Link href="/faq" style={{ color: 'var(--text-secondary)', textDecoration: 'none', fontSize: '0.95rem', transition: 'var(--transition)' }}>الأسئلة الشائعة</Link></li>
+            <li><Link href="/shipping" style={{ color: 'var(--text-secondary)', textDecoration: 'none', fontSize: '0.95rem', transition: 'var(--transition)' }}>الشحن والتوصيل</Link></li>
+            <li><Link href="/contact" style={{ color: 'var(--text-secondary)', textDecoration: 'none', fontSize: '0.95rem', transition: 'var(--transition)' }}>تواصلي معنا</Link></li>
             <li><Link href="/privacy" style={{ color: 'var(--text-secondary)', textDecoration: 'none', fontSize: '0.95rem', transition: 'var(--transition)' }}>{t('privacyPolicy')}</Link></li>
             <li><Link href="/returns" style={{ color: 'var(--text-secondary)', textDecoration: 'none', fontSize: '0.95rem', transition: 'var(--transition)' }}>{t('returnPolicy')}</Link></li>
+            <li><Link href="/terms" style={{ color: 'var(--text-secondary)', textDecoration: 'none', fontSize: '0.95rem', transition: 'var(--transition)' }}>الشروط والأحكام</Link></li>
           </ul>
         </div>
 

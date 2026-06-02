@@ -79,7 +79,17 @@ export default function Checkout() {
     city: ''
   });
 
-  useEffect(() => { setIsClient(true); }, []);
+  useEffect(() => {
+    setIsClient(true);
+    if (cart.length > 0 && typeof window !== 'undefined' && window.gtag) {
+      window.gtag('event', 'begin_checkout', {
+        currency: 'ILS',
+        value: Number(cartTotal) || 0,
+        items: cart.map(it => ({ item_id: it.sku || it.id, item_name: it.title, price: Number(it.price) || 0, quantity: it.quantity }))
+      });
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   // Prefill the saved address for logged-in customers.
   useEffect(() => {

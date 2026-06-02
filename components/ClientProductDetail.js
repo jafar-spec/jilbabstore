@@ -5,9 +5,12 @@ import { useToast } from '@/context/ToastContext';
 import { useLanguage } from '@/context/LanguageContext';
 import Link from 'next/link';
 import Image from 'next/image';
-import { getProductById, getReviews, addReview } from '@/lib/db';
+import { getProductById, getReviews } from '@/lib/db';
+import { auth } from '@/lib/firebase';
+import { onAuthStateChanged } from 'firebase/auth';
 import { useWishlist } from '@/context/WishlistContext';
 import { recordRecentlyViewed } from '@/components/RecentlyViewed';
+import { track, productItem } from '@/lib/analytics';
 
 export default function ClientProductDetail({ initialProduct, initialReviews, relatedProducts }) {
   const { addToCart } = useCart();
@@ -25,6 +28,13 @@ export default function ClientProductDetail({ initialProduct, initialReviews, re
   const [reviews, setReviews] = useState(initialReviews || []);
   const [newReview, setNewReview] = useState({ rating: 5, text: '', name: '' });
   const [isSubmittingReview, setIsSubmittingReview] = useState(false);
+
+  // Customer session (default app) — required to leave a verified review.
+  const [customer, setCustomer] = useState(null);
+  useEffect(() => {
+    const unsub = onAuthStateChanged(auth, setCustomer);
+    return () => unsub();
+  }, []);
   
   // Image Gallery & Zoom State
   const defaultImage = (initialProduct?.images && initialProduct.images.length > 0) 
@@ -40,6 +50,7 @@ export default function ClientProductDetail({ initialProduct, initialReviews, re
           if(inStock.length > 0) setSelectedSize(inStock[0].size);
       }
       recordRecentlyViewed(initialProduct.id);
+      track('view_item', { currency: 'ILS', value: Number(initialProduct.price) || 0, items: [productItem(initialProduct)] });
     }
   }, [initialProduct]);
 
@@ -91,14 +102,28 @@ export default function ClientProductDetail({ initialProduct, initialReviews, re
 
   const submitReview = async (e) => {
     e.preventDefault();
-    if (!newReview.name.trim() || !newReview.text.trim()) {
+    if (!customer) {
+      showToast('يجب تسجيل الدخول وشراء المنتج لكتابة تقييم', 'error');
+      return;
+    }
+    if (!newReview.text.trim()) {
       showToast(t('reviewFieldsRequired'), 'error');
       return;
     }
     setIsSubmittingReview(true);
     try {
-      await addReview(product.id, newReview);
-      setReviews([{ ...newReview, createdAt: new Date().toISOString() }, ...reviews]);
+      const token = await customer.getIdToken();
+      const res = await fetch('/api/reviews', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+        body: JSON.stringify({ productId: product.id, rating: newReview.rating, text: newReview.text, name: newReview.name })
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        showToast(data.error || t('reviewAddedError'), 'error');
+        return;
+      }
+      setReviews([data.review, ...reviews]);
       setNewReview({ rating: 5, text: '', name: '' });
       showToast(t('reviewAddedSuccess'), 'success');
     } catch (err) {

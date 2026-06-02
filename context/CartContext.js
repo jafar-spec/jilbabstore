@@ -1,6 +1,7 @@
 "use client";
 
 import { createContext, useState, useContext, useEffect, useRef } from 'react';
+import { track, productItem } from '@/lib/analytics';
 
 const CartContext = createContext();
 
@@ -58,6 +59,7 @@ export function CartProvider({ children }) {
     if (exceededStock) {
       setTimeout(() => alert(`الكمية المطلوبة تتجاوز المخزون المتاح (${maxStock})`), 0);
     } else {
+      track('add_to_cart', { currency: 'ILS', value: (Number(product.price) || 0) * (product.quantity || 1), items: [productItem(product, product.quantity || 1)] });
       setIsCartOpen(true);
     }
   };

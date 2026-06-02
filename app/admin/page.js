@@ -21,6 +21,7 @@ import {
 } from '@/lib/db';
 import AdminMap from '@/components/AdminMap';
 import { useAuth } from '@/context/AuthContext';
+import { uploadDataUrl } from '@/lib/uploads';
 
 // Helper function to compress images before saving as Base64 to avoid huge payloads
 const compressImage = (file, maxWidth = 800, maxHeight = 800) => {
@@ -422,9 +423,13 @@ export default function AdminDashboard() {
     }
 
     try {
-      const compressedImages = await Promise.all(files.map(file => compressImage(file)));
-      setNewProduct(prev => ({ ...prev, images: [...prev.images, ...compressedImages] }));
+      // Compress, then upload to Firebase Storage so the catalog stays light
+      // (URLs in Firestore instead of multi-hundred-KB Base64 blobs).
+      const compressed = await Promise.all(files.map(file => compressImage(file)));
+      const urls = await Promise.all(compressed.map(d => uploadDataUrl(d, 'products')));
+      setNewProduct(prev => ({ ...prev, images: [...prev.images, ...urls.filter(Boolean)] }));
     } catch (err) {
+      console.error('Image upload failed', err);
       showToast('حدث خطأ أثناء رفع الصور', 'error');
     }
   };
@@ -858,12 +863,12 @@ export default function AdminDashboard() {
     const file = e.target.files[0];
     if (file) {
       try {
-        // Compress CMS images slightly larger (1600px) but still under 1MB limit for Firestore
-        const compressedBase64 = await compressImage(file, 1600, 1600);
-        setCmsSettings(prev => ({ ...prev, [field]: compressedBase64 }));
+        const compressed = await compressImage(file, 1600, 1600);
+        const url = await uploadDataUrl(compressed, 'cms');
+        setCmsSettings(prev => ({ ...prev, [field]: url }));
       } catch (err) {
-        console.error("Error compressing CMS image", err);
-        showToast("فشل ضغط الصورة", "error");
+        console.error("Error uploading CMS image", err);
+        showToast("فشل رفع الصورة", "error");
       }
     }
   };

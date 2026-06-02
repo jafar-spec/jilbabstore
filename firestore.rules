@@ -96,10 +96,10 @@ service cloud.firestore {
       allow read, write: if isAdmin();
     }
 
-    // Reviews — Public read + create, admin manage
+    // Reviews — Public read; created server-side (verified purchase) only.
     match /reviews/{document=**} {
       allow read: if true;
-      allow create: if true;
+      allow create: if false;
       allow update, delete: if isAdmin();
     }
 
