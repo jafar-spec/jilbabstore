@@ -17,7 +17,6 @@ export default function ProductGrid({ title, products, subsections = [], emptyMe
   const [priceMax, setPriceMax] = useState('');
   const [category, setCategory] = useState('');
   const [sortBy, setSortBy] = useState('date_desc'); // date_desc, price_asc, price_desc
-  useScrollReveal();
 
   // Distinct categories present in the current product set (for the filter).
   const categories = [...new Set((products || []).map(p => p.category).filter(Boolean))];
@@ -57,6 +56,10 @@ export default function ProductGrid({ title, products, subsections = [], emptyMe
     // date_desc — newest first by createdAt (older products without it sort last)
     return new Date(b.createdAt || 0) - new Date(a.createdAt || 0);
   });
+
+  // Re-reveal whenever the visible set changes, so filtered-in cards (rendered
+  // after mount) don't stay stuck at opacity:0.
+  useScrollReveal([activeSubsection, category, priceMin, priceMax, sortBy, filteredProducts.length]);
 
   return (
     <section className="products">
