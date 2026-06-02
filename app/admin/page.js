@@ -482,9 +482,10 @@ export default function AdminDashboard() {
     const files = Array.from(e.target.files);
     if (files.length === 0) return;
     
-    // Limit to 4 images to avoid hitting document size limits too easily
-    if (newProduct.images.length + files.length > 4) {
-      showToast('الحد الأقصى للصور هو 4', 'error');
+    // Images live in Storage now (URLs only), so we can allow more per product.
+    const MAX_IMAGES = 10;
+    if (newProduct.images.length + files.length > MAX_IMAGES) {
+      showToast(`الحد الأقصى للصور هو ${MAX_IMAGES}`, 'error');
       return;
     }
 
@@ -1918,7 +1919,7 @@ export default function AdminDashboard() {
                     {/* Multi Image Upload */}
                     <div style={{ border: '2px dashed var(--border-color)', borderRadius: '12px', padding: '2rem', textAlign: 'center', position: 'relative' }}>
                         <i className="fa-solid fa-images" style={{ fontSize: '3rem', color: 'var(--accent-color)', marginBottom: '1rem' }}></i>
-                        <p>انقر أو اسحب صور المنتج (بحد أقصى 4 صور)</p>
+                        <p>انقر أو اسحب صور المنتج (حتى 10 صور)</p>
                         <input type="file" multiple accept="image/*" onChange={handleImageUpload} style={{ position: 'absolute', top: 0, left: 0, width: '100%', height: '100%', opacity: 0, cursor: 'pointer' }} />
                     </div>
 

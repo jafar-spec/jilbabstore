@@ -138,15 +138,22 @@ export default function Footer() {
                 {loading ? '...' : t('subscribe')}
               </button>
             </div>
-            <input
-              type="tel"
-              dir="ltr"
-              placeholder={t('newsletterPhone') || 'رقم الجوال لاستلام العروض عبر SMS (اختياري)'}
-              value={phone}
-              onChange={(e) => setPhone(e.target.value)}
-              aria-label="رقم الجوال (اختياري)"
-              style={{ background: 'transparent', border: 'none', outline: 'none', borderBottom: '1px solid var(--border-color)', paddingBottom: '0.4rem', width: '100%', fontFamily: 'inherit', fontSize: '0.85rem', color: 'var(--text-primary)' }}
-            />
+            <div>
+              <label htmlFor="newsletter-phone" style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '0.8rem', color: 'var(--text-secondary)', marginBottom: '6px' }}>
+                <i className="fa-solid fa-comment-sms" style={{ color: 'var(--accent-color)' }}></i>
+                {t('newsletterPhoneLabel') || 'وصّلني بالعروض عبر SMS (اختياري)'}
+              </label>
+              <input
+                id="newsletter-phone"
+                type="tel"
+                dir="ltr"
+                placeholder="05XXXXXXXX"
+                value={phone}
+                onChange={(e) => setPhone(e.target.value)}
+                aria-label={t('newsletterPhoneLabel') || 'رقم الجوال لاستلام العروض عبر SMS (اختياري)'}
+                style={{ width: '100%', padding: '0.6rem 0.9rem', borderRadius: '8px', border: '1px solid var(--border-color)', background: 'var(--bg-color)', outline: 'none', fontFamily: 'inherit', fontSize: '0.9rem', color: 'var(--text-primary)' }}
+              />
+            </div>
           </form>
         </div>
 
