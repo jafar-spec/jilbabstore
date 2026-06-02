@@ -2,7 +2,7 @@ import { NextResponse } from 'next/server';
 import { FieldValue } from 'firebase-admin/firestore';
 import { adminAuth, adminDb } from '@/lib/firebaseAdmin';
 import { rateLimit, clientIp } from '@/lib/rateLimit';
-import { sendEmail, orderConfirmationHtml, lowStockAlertHtml } from '@/lib/email';
+import { sendEmail, orderConfirmationHtml, lowStockAlertHtml, newOrderAdminHtml } from '@/lib/email';
 
 // Authoritative order creation. The client may send item ids/sizes/quantities,
 // but ALL money (prices, discount, shipping, total) is recomputed here from
@@ -210,6 +210,16 @@ export async function POST(req) {
         to: customerEmail,
         subject: `تأكيد الطلب #${orderRef.id.slice(0, 8).toUpperCase()} — Jilbab Store`,
         html: orderConfirmationHtml(orderDoc, orderRef.id)
+      }).catch(() => {});
+    }
+
+    // New-order alert to the store owner so orders are never missed.
+    const ownerEmail = settings.alertEmail || settings.contactEmail;
+    if (ownerEmail) {
+      sendEmail({
+        to: ownerEmail,
+        subject: `🛒 طلب جديد #${orderRef.id.slice(0, 8).toUpperCase()} — ₪${total.toFixed(2)}`,
+        html: newOrderAdminHtml(orderDoc, orderRef.id)
       }).catch(() => {});
     }
 
