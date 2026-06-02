@@ -295,7 +295,10 @@ button {
 
 .product-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(285px, 1fr));
+  /* auto-fit collapses empty tracks (so a few items don't pack to one side in
+     RTL); the 340px cap stops 1–2 cards stretching too wide; centred row. */
+  grid-template-columns: repeat(auto-fit, minmax(260px, 340px));
+  justify-content: center;
   gap: 3.5rem 2rem;
 }
 
