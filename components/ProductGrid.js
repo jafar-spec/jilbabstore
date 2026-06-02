@@ -15,27 +15,34 @@ export default function ProductGrid({ title, products, subsections = [], emptyMe
   const [showFilters, setShowFilters] = useState(false);
   const [priceMin, setPriceMin] = useState('');
   const [priceMax, setPriceMax] = useState('');
+  const [category, setCategory] = useState('');
   const [sortBy, setSortBy] = useState('date_desc'); // date_desc, price_asc, price_desc
   useScrollReveal();
+
+  // Distinct categories present in the current product set (for the filter).
+  const categories = [...new Set((products || []).map(p => p.category).filter(Boolean))];
 
   let filteredProducts = activeSubsection
     ? products.filter(p => p.subsectionId === activeSubsection)
     : [...products];
 
-  // Apply Price Filters
+  // Apply Price + Category Filters
   if (priceMin) {
     filteredProducts = filteredProducts.filter(p => Number(p.price) >= Number(priceMin));
   }
   if (priceMax) {
     filteredProducts = filteredProducts.filter(p => Number(p.price) <= Number(priceMax));
   }
+  if (category) {
+    filteredProducts = filteredProducts.filter(p => p.category === category);
+  }
 
-  // Apply Sorting
-  filteredProducts.sort((a, b) => {
+  // Apply Sorting (on a copy so we never mutate the products prop)
+  filteredProducts = [...filteredProducts].sort((a, b) => {
     if (sortBy === 'price_asc') return Number(a.price) - Number(b.price);
     if (sortBy === 'price_desc') return Number(b.price) - Number(a.price);
-    // default date_desc (assuming newer items have higher IDs or createdAt, but we can fallback to ID string comparison or leave as is if already sorted)
-    return 0; 
+    // date_desc — newest first by createdAt (older products without it sort last)
+    return new Date(b.createdAt || 0) - new Date(a.createdAt || 0);
   });
 
   return (
@@ -69,7 +76,7 @@ export default function ProductGrid({ title, products, subsections = [], emptyMe
                 letterSpacing: '0.04em'
               }}
             >
-              {lang === 'ar' ? sub.name_ar : lang === 'he' ? sub.name_he : sub.name_en}
+              {lang === 'ar' ? sub.name_ar : lang === 'he' ? (sub.name_he || sub.name_en) : sub.name_en}
             </button>
           ))}
         </div>
@@ -109,10 +116,24 @@ export default function ProductGrid({ title, products, subsections = [], emptyMe
               />
             </div>
 
+            {categories.length > 0 && (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
+                <label style={{ fontSize: '0.9rem', fontWeight: 'bold', color: 'var(--text-secondary)' }}>الفئة</label>
+                <select
+                  value={category}
+                  onChange={(e) => setCategory(e.target.value)}
+                  style={{ padding: '0.6rem', borderRadius: '8px', border: '1px solid var(--border-color)', background: 'var(--bg-color)', color: 'var(--text-primary)', minWidth: '150px' }}
+                >
+                  <option value="">{lang === 'en' ? 'All categories' : lang === 'he' ? 'כל הקטגוריות' : 'كل الفئات'}</option>
+                  {categories.map(c => <option key={c} value={c}>{c}</option>)}
+                </select>
+              </div>
+            )}
+
             <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
               <label style={{ fontSize: '0.9rem', fontWeight: 'bold', color: 'var(--text-secondary)' }}>ترتيب حسب</label>
-              <select 
-                value={sortBy} 
+              <select
+                value={sortBy}
                 onChange={(e) => setSortBy(e.target.value)}
                 style={{ padding: '0.6rem', borderRadius: '8px', border: '1px solid var(--border-color)', background: 'var(--bg-color)', color: 'var(--text-primary)', minWidth: '150px' }}
               >
@@ -122,8 +143,8 @@ export default function ProductGrid({ title, products, subsections = [], emptyMe
               </select>
             </div>
 
-            <button 
-              onClick={() => { setPriceMin(''); setPriceMax(''); setSortBy('date_desc'); }}
+            <button
+              onClick={() => { setPriceMin(''); setPriceMax(''); setCategory(''); setSortBy('date_desc'); }}
               style={{ background: 'transparent', border: 'none', color: '#e74c3c', cursor: 'pointer', textDecoration: 'underline', padding: '0.6rem' }}
             >
               إعادة ضبط

@@ -38,8 +38,9 @@ service cloud.firestore {
     match /products/{productId} {
       allow read: if true;
       allow create, delete: if isAdmin();
-      allow update: if isAdmin()
-                    || (request.resource.data.diff(resource.data).affectedKeys().hasOnly(['variants']));    
+      // Stock/variant changes now go through the server (Admin SDK, which
+      // bypasses rules) or an authenticated admin — no public variant writes.
+      allow update: if isAdmin();
     }
     match /sections/{document=**} {
       allow read: if true;
@@ -65,12 +66,9 @@ service cloud.firestore {
 
     // Orders — Strict access control
     match /orders/{orderId} {
-      // Allow order creation with basic validation
-      allow create: if request.resource.data.keys().hasAll(['items', 'total'])
-                    && request.resource.data.items is list
-                    && request.resource.data.items.size() > 0
-                    && request.resource.data.items.size() <= 50
-                    && request.resource.data.total is number;
+      // Orders are created server-side (Admin SDK / POST /api/orders) so totals
+      // and stock are enforced authoritatively. Clients may not create directly.
+      allow create: if false;
 
       // Admins and couriers can read all orders (couriers need the delivery
       // list). Customers can only read their own orders.
@@ -83,6 +81,14 @@ service cloud.firestore {
                     || (isCourier()
                         && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status']));
       allow delete: if isAdmin();
+    }
+
+    // Stock movements & purchase orders — staff only (written via Admin SDK or admin)
+    match /stock_movements/{document=**} {
+      allow read, write: if isAdmin();
+    }
+    match /purchase_orders/{document=**} {
+      allow read, write: if isAdmin();
     }
 
     // Reviews — Public read + create, admin manage

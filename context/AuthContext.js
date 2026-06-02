@@ -1,12 +1,12 @@
 "use client";
 
 import { createContext, useState, useEffect, useContext } from 'react';
-import { auth } from '@/lib/firebase';
-import { 
-  onAuthStateChanged, 
-  signInWithEmailAndPassword, 
-  createUserWithEmailAndPassword, 
-  signOut 
+import { staffAuth } from '@/lib/firebase';
+import {
+  onAuthStateChanged,
+  signInWithEmailAndPassword,
+  createUserWithEmailAndPassword,
+  signOut
 } from 'firebase/auth';
 
 const AuthContext = createContext();
@@ -17,16 +17,18 @@ export function AuthProvider({ children }) {
   const [role, setRole] = useState(null);
 
   useEffect(() => {
-    const unsubscribe = onAuthStateChanged(auth, async (user) => {
+    const unsubscribe = onAuthStateChanged(staffAuth, async (user) => {
       if (user) {
         setUser(user);
         try {
           const { doc, getDoc } = await import('firebase/firestore');
-          const { db } = await import('@/lib/firebase');
-          
-          const docRef = doc(db, 'admins', user.uid);
+          const { staffDb } = await import('@/lib/firebase');
+
+          // Read the role through the staff session so Firestore rules see the
+          // staff identity (not the customer one).
+          const docRef = doc(staffDb, 'admins', user.uid);
           const docSnap = await getDoc(docRef);
-          
+
           if (docSnap.exists()) {
             setRole(docSnap.data().role || 'operator');
           } else {
@@ -46,17 +48,17 @@ export function AuthProvider({ children }) {
   }, []);
 
   const login = (email, password) => {
-    return signInWithEmailAndPassword(auth, email, password);
+    return signInWithEmailAndPassword(staffAuth, email, password);
   };
 
   const register = (email, password) => {
-    return createUserWithEmailAndPassword(auth, email, password);
+    return createUserWithEmailAndPassword(staffAuth, email, password);
   };
 
   const logout = async () => {
     setUser(null);
     setRole(null);
-    return signOut(auth);
+    return signOut(staffAuth);
   };
 
   return (

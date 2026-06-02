@@ -28,12 +28,10 @@ function SearchContent() {
   useEffect(() => {
     if (loading) return;
     if (query) {
-      const lowerQuery = query.toLowerCase();
-      setFiltered(products.filter(p => 
-        p.title?.toLowerCase().includes(lowerQuery) || 
-        p.description?.toLowerCase().includes(lowerQuery) ||
-        p.category?.toLowerCase().includes(lowerQuery)
-      ));
+      import('@/lib/db').then(({ matchesProduct }) => {
+        const q = query.toLowerCase().trim();
+        setFiltered(products.filter(p => matchesProduct(p, q)));
+      });
     } else {
       setFiltered(products);
     }

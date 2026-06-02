@@ -5,10 +5,9 @@ import { useToast } from '@/context/ToastContext';
 import { useLanguage } from '@/context/LanguageContext';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
-import { useAuth } from '@/context/AuthContext';
-import { createOrder } from '@/lib/db';
 import { collection, query, where, getDocs, limit, doc, setDoc, serverTimestamp } from 'firebase/firestore';
-import { db } from '@/lib/firebase';
+import { onAuthStateChanged } from 'firebase/auth';
+import { db, auth } from '@/lib/firebase';
 import Image from 'next/image';
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
@@ -48,8 +47,14 @@ export default function Checkout() {
   const { showToast } = useToast();
   const { t, lang, storeSettings } = useLanguage();
   const router = useRouter();
-  const { user } = useAuth();
-  
+
+  // Customer session = the DEFAULT Firebase app (independent from staff/admin).
+  const [user, setUser] = useState(null);
+  useEffect(() => {
+    const unsub = onAuthStateChanged(auth, setUser);
+    return () => unsub();
+  }, []);
+
   const freeShippingThreshold = Number(storeSettings?.freeShippingThreshold) || 250;
   const shippingCost = Number(storeSettings?.shippingCost) || 30;
   
@@ -254,102 +259,91 @@ export default function Checkout() {
   };
 
   // --- Place Order ---
+  // Save/update customer profile in Firestore (logged-in customers only)
+  const saveCustomerProfile = async (orderId) => {
+    try {
+      if (!user) return;
+      const customerRef = doc(db, 'customers', user.uid);
+      await setDoc(customerRef, {
+        uid: user.uid,
+        fullName: formData.fullName || '',
+        email: user.email || formData.email || '',
+        phone1: formData.phone || formData.phone1 || '',
+        city: formData.city || '',
+        street: formData.address || formData.street || '',
+        lastOrderId: orderId,
+        lastOrderDate: new Date().toISOString(),
+        updatedAt: serverTimestamp()
+      }, { merge: true });
+    } catch (err) {
+      console.error('Error saving customer profile:', err);
+    }
+  };
+
   const handlePlaceOrder = async (e) => {
     e.preventDefault();
-
     setIsProcessing(true);
 
     try {
-      const sanitizedCart = cart.map(item => {
-        const sanitizedItem = { ...item };
-        delete sanitizedItem.images;
-        delete sanitizedItem.image;
-        delete sanitizedItem.description;
-        return sanitizedItem;
+      // Send only ids/sizes/quantities — the server recomputes all prices,
+      // discount, shipping and total authoritatively and reserves stock.
+      const payloadItems = cart.map(item => ({
+        id: item.id,
+        selectedSize: item.selectedSize,
+        sku: item.sku || null,
+        quantity: item.quantity
+      }));
+
+      const headers = { 'Content-Type': 'application/json' };
+      if (user) {
+        try { headers.Authorization = `Bearer ${await user.getIdToken()}`; } catch {}
+      }
+
+      const res = await fetch('/api/orders', {
+        method: 'POST',
+        headers,
+        body: JSON.stringify({
+          items: payloadItems,
+          customerInfo: { ...formData, email: user ? user.email : formData.email || '' },
+          promoCode: appliedPromo ? appliedPromo.code : null,
+          paymentMethod
+        })
       });
-
-      // PayPal billing is not yet wired to a confirmation webhook, so an order is
-      // never marked "paid" here — it stays pending until payment is confirmed.
-      const orderStatus = paymentMethod === 'cash'
-        ? 'قيد المعالجة (الدفع عند الاستلام)'
-        : 'قيد المعالجة (بانتظار الدفع عبر PayPal)';
-
-      const newOrder = {
-        date: new Date().toISOString(),
-        uid: user ? user.uid : null,
-        customerInfo: { ...formData, email: user ? user.email : formData.email || '' },
-        items: sanitizedCart,
-        subtotal: Number(cartTotal) || 0,
-        discount: Number(discountAmount) || 0,
-        promoCode: appliedPromo ? appliedPromo.code : null,
-        shipping: shipping || 0,
-        total: Number(finalTotal) || 0,
-        paymentMethod: paymentMethod,
-        status: orderStatus
-      };
-
-      // Save/update customer profile in Firestore
-      const saveCustomerProfile = async (orderId) => {
-        try {
-          if (!user) return; // Only save for logged-in users
-          const customerRef = doc(db, 'customers', user.uid);
-          await setDoc(customerRef, {
-            uid: user.uid,
-            fullName: formData.fullName || '',
-            email: user.email || formData.email || '',
-            phone1: formData.phone1 || '',
-            phone2: formData.phone2 || '',
-            city: formData.city || '',
-            neighborhood: formData.neighborhood || '',
-            street: formData.street || '',
-            buildingFloor: formData.buildingFloor || '',
-            lastOrderId: orderId,
-            lastOrderDate: new Date().toISOString(),
-            updatedAt: serverTimestamp()
-          }, { merge: true });
-        } catch (err) {
-          console.error('Error saving customer profile:', err);
-        }
-      };
-
-      // For PayPal, redirect to PayPal
-      if (paymentMethod === 'paypal') {
-        // Create order first
-        const orderId = await createOrder(newOrder);
-        await saveCustomerProfile(orderId);
-        
-        // Build PayPal payment link
-        const paypalClientId = process.env.NEXT_PUBLIC_PAYPAL_CLIENT_ID;
-        if (paypalClientId) {
-          // Use PayPal checkout SDK
-          showToast('جاري التحويل إلى PayPal...', 'info');
-          // For now, create the order and redirect to PayPal.me or use PayPal buttons
-          window.open(`https://www.paypal.com/paypalme/jilbabstore/${finalTotal.toFixed(2)}ILS`, '_blank');
-        }
-        
-        await generateReceipt(orderId, newOrder);
-        
-        if (typeof window !== 'undefined' && window.gtag) {
-          window.gtag('event', 'purchase', {
-            transaction_id: orderId, value: finalTotal, currency: 'ILS',
-            items: newOrder.items.map(item => ({ item_id: item.sku || item.id, item_name: item.title, price: item.price, quantity: item.quantity }))
-          });
-        }
-
-        clearCart();
-        showToast(`تم إنشاء الطلب بنجاح! ${orderId}`, 'success');
-        router.push('/profile');
+      const data = await res.json();
+      if (!res.ok) {
+        showToast(data.error || t('checkoutError'), 'error');
         return;
       }
-      
-      const orderId = await createOrder(newOrder);
+
+      const orderId = data.orderId;
       await saveCustomerProfile(orderId);
-      await generateReceipt(orderId, newOrder);
+
+      // Receipt built from the server-computed totals.
+      const receiptOrder = {
+        customerInfo: { ...formData, email: user ? user.email : formData.email || '' },
+        items: cart,
+        subtotal: data.subtotal,
+        discount: data.discount,
+        shipping: data.shipping,
+        total: data.total,
+        promoCode: data.promoCode,
+        paymentMethod
+      };
+
+      if (paymentMethod === 'paypal') {
+        const paypalClientId = process.env.NEXT_PUBLIC_PAYPAL_CLIENT_ID;
+        if (paypalClientId) {
+          showToast('جاري التحويل إلى PayPal...', 'info');
+          window.open(`https://www.paypal.com/paypalme/jilbabstore/${Number(data.total).toFixed(2)}ILS`, '_blank');
+        }
+      }
+
+      await generateReceipt(orderId, receiptOrder);
 
       if (typeof window !== 'undefined' && window.gtag) {
         window.gtag('event', 'purchase', {
-          transaction_id: orderId, value: finalTotal, currency: 'ILS',
-          items: newOrder.items.map(item => ({ item_id: item.sku || item.id, item_name: item.title, price: item.price, quantity: item.quantity }))
+          transaction_id: orderId, value: data.total, currency: 'ILS',
+          items: cart.map(item => ({ item_id: item.sku || item.id, item_name: item.title, price: item.price, quantity: item.quantity }))
         });
       }
 

@@ -16,7 +16,8 @@ import {
   getAllPromoCodes, addPromoCode, deletePromoCode,
   getAllTickets, updateTicket, deleteTicket, updateSectionSubsections,
   updateOrderRouteSequence, getAllReviews, updateReview, deleteReview,
-
+  setVariantStock, adjustVariantStock, getStockMovements,
+  getPurchaseOrders, createPurchaseOrder, receivePurchaseOrder, deletePurchaseOrder,
 } from '@/lib/db';
 import AdminMap from '@/components/AdminMap';
 import { useAuth } from '@/context/AuthContext';
@@ -105,6 +106,11 @@ export default function AdminDashboard() {
   const [newCourier, setNewCourier] = useState({ email: '', password: '', name: '' });
   const [courierBusy, setCourierBusy] = useState(false);
 
+  // STOCK MOVEMENTS + PURCHASE ORDERS STATE
+  const [stockMovements, setStockMovements] = useState([]);
+  const [purchaseOrders, setPurchaseOrders] = useState([]);
+  const [poDraft, setPoDraft] = useState({ supplier: '', lines: [] });
+
 
 
   // CMS STATE
@@ -135,12 +141,15 @@ export default function AdminDashboard() {
   const [newProduct, setNewProduct] = useState({
     title: '',
     price: '',
-    images: [], 
+    images: [],
     description: '',
     sectionId: '',
+    subsectionId: '',
     category: '',
-    variants: [] // Array of { size: '', stock: 0 }
+    lowStockThreshold: 5,
+    variants: [] // Array of { size, stock, sku, reserved }
   });
+  const [editingProductId, setEditingProductId] = useState(null);
 
   const availableSizes = ['XS', 'S', 'M', 'L', 'XL', 'XXL', '3XL', 'One Size'];
 
@@ -216,6 +225,41 @@ export default function AdminDashboard() {
       console.error('Error fetching couriers:', err);
       showToast('فشل تحميل المندوبين', 'error');
     }
+  };
+
+  // --- STOCK MOVEMENTS + PURCHASE ORDERS ---
+  const loadMovements = async () => {
+    try { setStockMovements(await getStockMovements(200)); }
+    catch (e) { console.error(e); showToast('فشل تحميل حركة المخزون', 'error'); }
+  };
+  const loadPurchaseOrders = async () => {
+    try { setPurchaseOrders(await getPurchaseOrders()); }
+    catch (e) { console.error(e); showToast('فشل تحميل أوامر التوريد', 'error'); }
+  };
+
+  const addPoLine = () => setPoDraft(d => ({ ...d, lines: [...d.lines, { productId: '', sku: '', qty: 1 }] }));
+  const updatePoLine = (i, patch) => setPoDraft(d => ({ ...d, lines: d.lines.map((l, idx) => idx === i ? { ...l, ...patch } : l) }));
+  const removePoLine = (i) => setPoDraft(d => ({ ...d, lines: d.lines.filter((_, idx) => idx !== i) }));
+
+  const submitPurchaseOrder = async (e) => {
+    e.preventDefault();
+    const lines = poDraft.lines.filter(l => l.productId && l.sku && Number(l.qty) > 0);
+    if (lines.length === 0) { showToast('أضف صنفاً واحداً على الأقل', 'error'); return; }
+    try {
+      await createPurchaseOrder({ supplier: poDraft.supplier || '', lines: lines.map(l => ({ ...l, qty: Number(l.qty) })) });
+      showToast('تم إنشاء أمر التوريد', 'success');
+      setPoDraft({ supplier: '', lines: [] });
+      loadPurchaseOrders();
+    } catch (err) { console.error(err); showToast('فشل إنشاء أمر التوريد', 'error'); }
+  };
+
+  const handleReceivePO = async (poId) => {
+    if (!confirm('استلام أمر التوريد وإضافة الكميات إلى المخزون؟')) return;
+    try {
+      await receivePurchaseOrder(poId);
+      showToast('تم استلام أمر التوريد وتحديث المخزون', 'success');
+      await Promise.all([loadPurchaseOrders(), fetchData(), loadMovements()]);
+    } catch (err) { console.error(err); showToast('فشل استلام أمر التوريد', 'error'); }
   };
 
   const handleAddCourier = async (e) => {
@@ -415,6 +459,44 @@ export default function AdminDashboard() {
     }));
   };
 
+  // Build a lowercased search blob so search can match title, category,
+  // section/subsection names, sizes and SKUs — not just the title.
+  const buildSearchText = (prod, variants) => {
+    const section = sections.find(s => s.id === prod.sectionId);
+    const sub = (section?.subsections || []).find(ss => ss.id === prod.subsectionId);
+    const parts = [
+      prod.title, prod.category, prod.description,
+      section?.title_en, section?.title_ar,
+      sub?.name_en, sub?.name_ar,
+      ...variants.map(v => v.size),
+      ...variants.map(v => v.sku)
+    ];
+    return parts.filter(Boolean).join(' ').toLowerCase();
+  };
+
+  const resetProductForm = () => {
+    setEditingProductId(null);
+    setNewProduct({ title: '', price: '', images: [], description: '', sectionId: sections[0]?.id || '', subsectionId: '', category: '', lowStockThreshold: 5, variants: [] });
+    if (fileInputRef.current) fileInputRef.current.value = "";
+  };
+
+  const startEditProduct = (prod) => {
+    setEditingProductId(prod.id);
+    setNewProduct({
+      title: prod.title || '',
+      price: prod.price ?? '',
+      images: prod.images || [],
+      description: prod.description || '',
+      sectionId: prod.sectionId || (sections[0]?.id || ''),
+      subsectionId: prod.subsectionId || '',
+      category: prod.category || '',
+      lowStockThreshold: prod.lowStockThreshold ?? 5,
+      variants: (prod.variants || []).map(v => ({ size: v.size, stock: v.stock, sku: v.sku, reserved: v.reserved || 0 }))
+    });
+    setActiveTab('products');
+    if (typeof window !== 'undefined') window.scrollTo({ top: 0, behavior: 'smooth' });
+  };
+
   const handleAddProduct = async (e) => {
     e.preventDefault();
     if (!newProduct.title || !newProduct.price) return;
@@ -426,60 +508,78 @@ export default function AdminDashboard() {
       showToast("يرجى رفع صورة واحدة على الأقل.", "error");
       return;
     }
-    
+
     setLoading(true);
     try {
-      // Generate SKUs for variants
+      // Deterministic, unique-per-product SKUs: stable base + size. Preserve
+      // existing SKUs when editing so stock history/matching stays intact.
+      const skuBase = editingProductId
+        ? String(editingProductId).slice(0, 6).toUpperCase()
+        : `JS${Math.floor(Math.random() * 900000) + 100000}`;
       const variantsWithSku = newProduct.variants.map(v => ({
-          ...v,
-          sku: `SKU-${Math.floor(Math.random() * 90000) + 10000}-${v.size}`
+        size: v.size,
+        stock: Number(v.stock) || 0,
+        reserved: Number(v.reserved) || 0,
+        sku: v.sku || `${skuBase}-${String(v.size).toUpperCase().replace(/\s+/g, '')}`
       }));
 
-      const newBaseProduct = {
-          title: newProduct.title,
-          price: parseFloat(newProduct.price),
-          images: newProduct.images,
-          description: newProduct.description,
-          sectionId: newProduct.sectionId || (sections[0]?.id || ''),
-          category: newProduct.category,
-          isNewArrival: true,
-          variants: variantsWithSku
+      const productDoc = {
+        title: newProduct.title,
+        price: parseFloat(newProduct.price),
+        images: newProduct.images,
+        description: newProduct.description,
+        sectionId: newProduct.sectionId || (sections[0]?.id || ''),
+        subsectionId: newProduct.subsectionId || '',
+        category: newProduct.category || '',
+        lowStockThreshold: Number(newProduct.lowStockThreshold) || 5,
+        isNewArrival: true,
+        variants: variantsWithSku
       };
+      productDoc.searchText = buildSearchText(productDoc, variantsWithSku);
 
-      await createProduct(newBaseProduct);
-      
-      showToast(`تمت إضافة المنتج بنجاح!`, "success");
-      setNewProduct({ title: '', price: '', images: [], description: '', sectionId: sections[0]?.id || '', category: '', variants: [] });
-      if (fileInputRef.current) fileInputRef.current.value = "";
-      await fetchData(); 
+      if (editingProductId) {
+        await updateProduct(editingProductId, productDoc);
+        showToast('تم تحديث المنتج بنجاح!', 'success');
+      } else {
+        await createProduct({ ...productDoc, createdAt: new Date().toISOString() });
+        showToast('تمت إضافة المنتج بنجاح!', 'success');
+      }
+
+      resetProductForm();
+      await fetchData();
     } catch (error) {
-      console.error("Error adding product:", error);
-      showToast('حدث خطأ أثناء إضافة المنتج. قد تكون الصور كبيرة جداً.', "error");
+      console.error("Error saving product:", error);
+      showToast('حدث خطأ أثناء حفظ المنتج. قد تكون الصور كبيرة جداً.', "error");
     } finally {
       setLoading(false);
     }
   };
 
+  // Set absolute stock for a variant — transactional + audited (server helper).
   const updateProductStock = async (baseId, sku, newStock) => {
-    if (newStock < 0) return;
-    const prodToUpdate = products.find(p => p.id === baseId);
-    if (!prodToUpdate) return;
-    
-    let updatedData;
-    if (prodToUpdate.variants) {
-      const updatedVariants = prodToUpdate.variants.map(v => 
-        v.sku === sku ? { ...v, stock: newStock } : v
-      );
-      updatedData = { variants: updatedVariants };
-    } else {
-      updatedData = { stock: newStock };
-    }
-
+    if (newStock < 0 || !sku) return;
     try {
-      await updateProduct(baseId, updatedData);
-      setProducts(products.map(p => p.id === baseId ? { ...p, ...updatedData } : p));
+      await setVariantStock(baseId, sku, newStock, { reason: 'manual', by: authRole });
+      setProducts(prev => prev.map(p => p.id === baseId
+        ? { ...p, variants: (p.variants || []).map(v => v.sku === sku ? { ...v, stock: newStock } : v) }
+        : p));
     } catch (err) {
-      showToast("فشل تحديث المخزون", "error");
+      console.error(err);
+      showToast(err.message === 'Variant not found' ? 'تعذر إيجاد هذا الصنف' : 'فشل تحديث المخزون', "error");
+    }
+  };
+
+  // Adjust a variant's stock by a delta — transactional + audited.
+  const adjustStock = async (baseId, sku, delta, reason = 'adjustment') => {
+    if (!sku) return;
+    try {
+      const r = await adjustVariantStock(baseId, sku, delta, { reason, by: authRole });
+      setProducts(prev => prev.map(p => p.id === baseId
+        ? { ...p, variants: (p.variants || []).map(v => v.sku === sku ? { ...v, stock: r.newStock } : v) }
+        : p));
+    } catch (err) {
+      console.error(err);
+      showToast(err.message === 'Insufficient stock' ? 'المخزون غير كافٍ' : 'فشل تحديث المخزون', "error");
     }
   };
 
@@ -499,29 +599,25 @@ export default function AdminDashboard() {
     try {
       const currentOrder = orders.find(o => o.id === orderId);
 
-      // If canceling, restore stock for each item
-      if (newStatus === 'ملغي' && currentOrder && currentOrder.status !== 'ملغي') {
-        try {
-          for (const item of (currentOrder.items || [])) {
-            if (!item.id || !item.selectedSize) continue;
-            const prod = products.find(p => p.id === item.id);
-            if (!prod || !prod.variants) continue;
-            const updatedVariants = prod.variants.map(v =>
-              v.size === item.selectedSize ? { ...v, stock: (v.stock || 0) + (item.quantity || 1) } : v
-            );
-            await updateProduct(item.id, { variants: updatedVariants });
-            setProducts(prev => prev.map(p => p.id === item.id ? { ...p, variants: updatedVariants } : p));
-          }
-          showToast('تم استعادة المخزون تلقائياً', 'info');
-        } catch (stockErr) {
-          console.error('Failed to restore stock:', stockErr);
-        }
+      // Status change + atomic stock lifecycle (fulfill on delivery, restore on
+      // cancel) handled server-side so it's transactional and audited.
+      const token = await user.getIdToken();
+      const res = await fetch('/api/orders/transition', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+        body: JSON.stringify({ orderId, status: newStatus })
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        showToast(data.error || 'فشل تحديث الحالة', 'error');
+        return;
       }
 
-      await updateOrderDoc(orderId, { status: newStatus });
-      setOrders(orders.map(order => 
+      setOrders(orders.map(order =>
         order.id === orderId ? { ...order, status: newStatus } : order
       ));
+      // Refresh products so on-hand/available reflect the stock change.
+      getProducts().then(setProducts).catch(() => {});
       showToast(`تم تحديث الحالة إلى: ${newStatus}`, 'success');
 
       // Send email if applicable
@@ -548,15 +644,13 @@ export default function AdminDashboard() {
         }
 
         try {
-          // get current auth token
-          const { auth } = await import('@/lib/firebase');
-          const token = await auth.currentUser?.getIdToken();
+          const token = await user.getIdToken();
 
           await fetch('/api/send-email', {
             method: 'POST',
-            headers: { 
+            headers: {
               'Content-Type': 'application/json',
-              'Authorization': `Bearer ${token}` 
+              'Authorization': `Bearer ${token}`
             },
             body: JSON.stringify({
               to: customerEmail,
@@ -741,10 +835,19 @@ export default function AdminDashboard() {
     }
   };
 
-  const allInventoryItems = products.flatMap(p => 
-    p.variants 
-      ? p.variants.map(v => ({ ...p, size: v.size, sku: v.sku, stock: v.stock, baseId: p.id }))
-      : [{ ...p, baseId: p.id }]
+  const allInventoryItems = products.flatMap(p =>
+    p.variants
+      ? p.variants.map(v => {
+          const stock = Number(v.stock) || 0;
+          const reserved = Number(v.reserved) || 0;
+          return {
+            ...p, size: v.size, sku: v.sku, stock, reserved,
+            available: stock - reserved,
+            threshold: Number(p.lowStockThreshold) || 5,
+            baseId: p.id
+          };
+        })
+      : [{ ...p, baseId: p.id, stock: Number(p.stock) || 0, reserved: 0, available: Number(p.stock) || 0, threshold: Number(p.lowStockThreshold) || 5 }]
   );
 
   const filteredInventory = allInventoryItems.filter(p => 
@@ -952,6 +1055,12 @@ export default function AdminDashboard() {
               <button onClick={() => { setActiveTab('couriers'); fetchCouriers(); }} style={navButtonStyle(activeTab === 'couriers')}>
                 <i className="fa-solid fa-truck-fast" style={{ marginLeft: '10px' }}></i> المندوبون
               </button>
+              <button onClick={() => { setActiveTab('movements'); loadMovements(); }} style={navButtonStyle(activeTab === 'movements')}>
+                <i className="fa-solid fa-right-left" style={{ marginLeft: '10px' }}></i> حركة المخزون
+              </button>
+              <button onClick={() => { setActiveTab('purchase'); loadPurchaseOrders(); }} style={navButtonStyle(activeTab === 'purchase')}>
+                <i className="fa-solid fa-dolly" style={{ marginLeft: '10px' }}></i> أوامر التوريد
+              </button>
             </>
           )}
 
@@ -979,6 +1088,8 @@ export default function AdminDashboard() {
               activeTab === 'promos' ? 'كوبونات الخصم والترويج' :
               activeTab === 'customers' ? 'قاعدة بيانات العملاء والمشتريات' :
               activeTab === 'couriers' ? 'إدارة المندوبين' :
+              activeTab === 'movements' ? 'سجل حركة المخزون' :
+              activeTab === 'purchase' ? 'أوامر التوريد (إعادة التخزين)' :
               activeTab === 'orders' ? 'إدارة الطلبات الواردة' :
               activeTab === 'delivery' ? 'طلبات التوصيل الخاصة بك' : 'بيانات التوصيل والتوزيع'}
           </h1>
@@ -1187,24 +1298,10 @@ export default function AdminDashboard() {
                             </span>
                             
                             {/* Fast Increment Button */}
-                            <button 
+                            <button
                               onClick={async () => {
-                                const newQty = item.stock + 10;
-                                try {
-                                  const prod = products.find(p => p.id === item.baseId);
-                                  if (prod && prod.variants) {
-                                    const updatedVariants = prod.variants.map(v => 
-                                      v.size === item.size ? { ...v, stock: newQty } : v
-                                    );
-                                    await updateProduct(item.baseId, { variants: updatedVariants });
-                                    setProducts(products.map(p => 
-                                      p.id === item.baseId ? { ...p, variants: updatedVariants } : p
-                                    ));
-                                    showToast(`تمت إضافة 10 قطع إلى ${item.title}`, "success");
-                                  }
-                                } catch (e) {
-                                  showToast("فشل تحديث المخزون", "error");
-                                }
+                                await adjustStock(item.baseId, item.sku, 10, 'restock');
+                                showToast(`تمت إضافة 10 قطع إلى ${item.title}`, "success");
                               }}
                               style={{ border: 'none', background: 'var(--text-primary)', color: 'var(--bg-color)', width: '28px', height: '28px', borderRadius: '8px', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '0.8rem', transition: 'var(--transition)' }}
                               title="إضافة 10 قطع فوراً"
@@ -1506,15 +1603,20 @@ export default function AdminDashboard() {
                         {filteredInventory.map(product => {
                           const primaryImg = (product.images && product.images.length > 0) ? product.images[0] : (product.image || '/assets/black_jilbab_1779926556174.png');
                           const stockLevel = product.stock || 0;
-                          const stockColor = stockLevel === 0 ? '#e74c3c' : stockLevel <= 5 ? '#f5a623' : '#28a745';
-                          const stockBg = stockLevel === 0 ? 'rgba(231,76,60,0.1)' : stockLevel <= 5 ? 'rgba(255,193,7,0.1)' : 'rgba(40,167,69,0.1)';
-                          const stockLabel = stockLevel === 0 ? 'نفذت' : stockLevel <= 5 ? 'منخفض' : 'متوفر';
+                          const reserved = product.reserved || 0;
+                          const available = (product.available != null) ? product.available : stockLevel;
+                          const threshold = product.threshold || 5;
+                          const stockColor = available <= 0 ? '#e74c3c' : available <= threshold ? '#f5a623' : '#28a745';
+                          const stockBg = available <= 0 ? 'rgba(231,76,60,0.1)' : available <= threshold ? 'rgba(255,193,7,0.1)' : 'rgba(40,167,69,0.1)';
+                          const stockLabel = available <= 0 ? 'نفذت' : available <= threshold ? 'منخفض' : 'متوفر';
+                          const baseProduct = products.find(p => p.id === product.baseId);
                           return (
                             <tr key={product.sku || product.baseId} style={{ borderBottom: '1px solid var(--glass-border)' }}>
                               <td style={{ padding: '1rem' }}><img src={primaryImg} alt="" style={{ width: '50px', height: '50px', objectFit: 'cover', borderRadius: '8px' }} /></td>
                               <td style={{ padding: '1rem' }}>
                                 <strong>{product.title}</strong><br/>
                                 <span style={{ fontSize: '0.8rem', padding: '2px 8px', borderRadius: '10px', background: 'rgba(108,92,231,0.1)', color: '#6c5ce7' }}>{product.size || 'عام'}</span>
+                                {reserved > 0 && <span style={{ fontSize: '0.75rem', marginInlineStart: '6px', color: 'var(--text-secondary)' }}>محجوز: {reserved}</span>}
                               </td>
                               <td style={{ padding: '1rem', fontFamily: 'monospace', fontSize: '0.85rem' }}>{product.sku || 'N/A'}</td>
                               <td style={{ padding: '1rem', fontWeight: '600' }}>₪{Number(product.price).toFixed(2)}</td>
@@ -1523,12 +1625,14 @@ export default function AdminDashboard() {
                                   <button onClick={() => updateProductStock(product.baseId, product.sku, Math.max(0, stockLevel - 1))} style={{ width: '32px', height: '32px', borderRadius: '8px', border: '1px solid #ccc', background: 'var(--bg-color)', cursor: 'pointer', fontWeight: 'bold', fontSize: '1.1rem' }}>−</button>
                                   <input type="number" min="0" value={stockLevel} onChange={(e) => updateProductStock(product.baseId, product.sku, Math.max(0, parseInt(e.target.value) || 0))} style={{ width: '60px', textAlign: 'center', padding: '0.4rem', borderRadius: '8px', border: `2px solid ${stockColor}`, fontWeight: 'bold', fontSize: '1rem', background: stockBg, color: stockColor }} />
                                   <button onClick={() => updateProductStock(product.baseId, product.sku, stockLevel + 1)} style={{ width: '32px', height: '32px', borderRadius: '8px', border: '1px solid #ccc', background: 'var(--bg-color)', cursor: 'pointer', fontWeight: 'bold', fontSize: '1.1rem' }}>+</button>
+                                  <span style={{ fontSize: '0.75rem', color: 'var(--text-secondary)' }}>متاح: {available}</span>
                                 </div>
                               </td>
                               <td style={{ padding: '1rem' }}>
                                 <span style={{ padding: '4px 12px', borderRadius: '20px', fontSize: '0.8rem', fontWeight: '700', background: stockBg, color: stockColor }}>{stockLabel}</span>
                               </td>
-                              <td style={{ padding: '1rem' }}>
+                              <td style={{ padding: '1rem', display: 'flex', gap: '6px' }}>
+                                <button onClick={() => baseProduct && startEditProduct(baseProduct)} style={{ color: '#6c5ce7', background: 'rgba(108,92,231,0.1)', border: 'none', padding: '8px 12px', borderRadius: '8px', cursor: 'pointer', fontWeight: '600', fontSize: '0.8rem' }}><i className="fa-solid fa-pen"></i> تعديل</button>
                                 <button onClick={() => deleteProduct(product.baseId)} style={{ color: '#e74c3c', background: 'rgba(231,76,60,0.1)', border: 'none', padding: '8px 12px', borderRadius: '8px', cursor: 'pointer', fontWeight: '600', fontSize: '0.8rem' }}><i className="fa-solid fa-trash"></i> حذف</button>
                               </td>
                             </tr>
@@ -1544,8 +1648,14 @@ export default function AdminDashboard() {
             {/* ADD PRODUCT TAB */}
             {activeTab === 'products' && role === 'operator' && (
               <div style={{ background: 'var(--surface-color)', padding: '3rem', borderRadius: '16px', border: '1px solid var(--glass-border)', maxWidth: '900px', margin: '0 auto' }}>
+                  {editingProductId && (
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.5rem', padding: '0.8rem 1.2rem', background: 'rgba(108,92,231,0.1)', borderRadius: '10px' }}>
+                      <strong style={{ color: '#6c5ce7' }}><i className="fa-solid fa-pen"></i> وضع التعديل — تعديل منتج موجود</strong>
+                      <button type="button" onClick={resetProductForm} style={{ background: 'transparent', border: '1px solid var(--border-color)', borderRadius: '8px', padding: '0.4rem 1rem', cursor: 'pointer', color: 'var(--text-primary)' }}>إلغاء التعديل</button>
+                    </div>
+                  )}
                   <form onSubmit={handleAddProduct} style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
-                    
+
                     {/* Multi Image Upload */}
                     <div style={{ border: '2px dashed var(--border-color)', borderRadius: '12px', padding: '2rem', textAlign: 'center', position: 'relative' }}>
                         <i className="fa-solid fa-images" style={{ fontSize: '3rem', color: 'var(--accent-color)', marginBottom: '1rem' }}></i>
@@ -1604,6 +1714,11 @@ export default function AdminDashboard() {
                         <label className="admin-label">تصنيف إضافي (مثال: جلباب)</label>
                         <input type="text" value={newProduct.category} onChange={e => setNewProduct({...newProduct, category: e.target.value})} className="admin-input" />
                       </div>
+
+                      <div style={{ flex: '1 1 200px' }}>
+                        <label className="admin-label">حد التنبيه للمخزون المنخفض</label>
+                        <input type="number" min="0" value={newProduct.lowStockThreshold} onChange={e => setNewProduct({...newProduct, lowStockThreshold: e.target.value})} className="admin-input" />
+                      </div>
                     </div>
 
                     {/* Variant & Stock Configurator */}
@@ -1646,7 +1761,7 @@ export default function AdminDashboard() {
                       <textarea value={newProduct.description} onChange={e => setNewProduct({...newProduct, description: e.target.value})} className="admin-input" style={{ minHeight: '120px' }} />
                     </div>
                     
-                    <button type="submit" className="btn-primary" style={{ marginTop: '1rem', padding: '1rem' }}>إضافة للمخزون وإنشاء الباركود</button>
+                    <button type="submit" className="btn-primary" style={{ marginTop: '1rem', padding: '1rem' }}>{editingProductId ? 'حفظ التعديلات' : 'إضافة للمخزون وإنشاء الباركود'}</button>
                   </form>
               </div>
             )}
@@ -2433,6 +2548,119 @@ export default function AdminDashboard() {
                             style={{ padding: '0.5rem 1rem', background: 'rgba(231,76,60,0.1)', border: '1px solid #e74c3c', borderRadius: '8px', color: '#e74c3c', cursor: 'pointer', fontWeight: 'bold' }}>
                             <i className="fa-solid fa-trash" style={{ marginLeft: '6px' }}></i> حذف
                           </button>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              </div>
+            )}
+
+            {/* STOCK MOVEMENTS (AUDIT LOG) TAB */}
+            {activeTab === 'movements' && role === 'operator' && (
+              <div style={{ background: 'var(--surface-color)', padding: '1.5rem', borderRadius: '16px', border: '1px solid var(--glass-border)' }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem' }}>
+                  <h3 style={{ margin: 0 }}>آخر {stockMovements.length} حركة مخزون</h3>
+                  <button onClick={loadMovements} style={{ padding: '0.5rem 1rem', borderRadius: '8px', border: '1px solid var(--border-color)', background: 'var(--bg-color)', cursor: 'pointer', color: 'var(--text-primary)' }}><i className="fa-solid fa-rotate"></i> تحديث</button>
+                </div>
+                {stockMovements.length === 0 ? (
+                  <EmptyState icon="fa-right-left" text="لا توجد حركات مخزون بعد." />
+                ) : (
+                  <div style={{ overflowX: 'auto' }}>
+                    <table style={{ width: '100%', borderCollapse: 'collapse', minWidth: '760px' }}>
+                      <thead>
+                        <tr style={{ borderBottom: '2px solid var(--glass-border)', textAlign: 'right', color: 'var(--text-secondary)', fontSize: '0.85rem' }}>
+                          <th style={{ padding: '0.8rem' }}>التاريخ</th>
+                          <th style={{ padding: '0.8rem' }}>المنتج / المقاس</th>
+                          <th style={{ padding: '0.8rem' }}>SKU</th>
+                          <th style={{ padding: '0.8rem' }}>السبب</th>
+                          <th style={{ padding: '0.8rem' }}>التغيير</th>
+                          <th style={{ padding: '0.8rem' }}>المخزون بعدها</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {stockMovements.map(m => {
+                          const reasonLabel = { sale: 'بيع', reserve: 'حجز', release: 'إلغاء حجز', return: 'إرجاع', restock: 'توريد', manual: 'تعديل يدوي', adjustment: 'تسوية', cancel: 'إلغاء' }[m.reason] || m.reason;
+                          const delta = Number(m.delta) || 0;
+                          const reservedDelta = Number(m.reservedDelta) || 0;
+                          return (
+                            <tr key={m.id} style={{ borderBottom: '1px solid var(--glass-border)', fontSize: '0.85rem' }}>
+                              <td style={{ padding: '0.8rem', whiteSpace: 'nowrap' }}>{m.at ? new Date(m.at).toLocaleString('en-GB') : '—'}</td>
+                              <td style={{ padding: '0.8rem' }}>{m.title} <span style={{ color: 'var(--text-secondary)' }}>/ {m.size}</span></td>
+                              <td style={{ padding: '0.8rem', fontFamily: 'monospace' }}>{m.sku}</td>
+                              <td style={{ padding: '0.8rem' }}>{reasonLabel}</td>
+                              <td style={{ padding: '0.8rem', fontWeight: 700, color: delta < 0 ? '#e74c3c' : delta > 0 ? '#28a745' : 'var(--text-secondary)' }}>
+                                {delta !== 0 ? (delta > 0 ? `+${delta}` : delta) : (reservedDelta !== 0 ? `محجوز ${reservedDelta > 0 ? '+' : ''}${reservedDelta}` : '—')}
+                              </td>
+                              <td style={{ padding: '0.8rem' }}>{m.newStock != null ? m.newStock : '—'}</td>
+                            </tr>
+                          );
+                        })}
+                      </tbody>
+                    </table>
+                  </div>
+                )}
+              </div>
+            )}
+
+            {/* PURCHASE ORDERS TAB */}
+            {activeTab === 'purchase' && role === 'operator' && (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '2rem' }}>
+                {/* Create PO */}
+                <div style={{ background: 'var(--surface-color)', padding: '1.5rem', borderRadius: '16px', border: '1px solid var(--glass-border)' }}>
+                  <h3 style={{ marginTop: 0 }}><i className="fa-solid fa-dolly" style={{ marginInlineEnd: '8px', color: 'var(--accent-color)' }}></i>إنشاء أمر توريد جديد</h3>
+                  <p style={{ color: 'var(--text-secondary)', fontSize: '0.85rem', marginTop: 0 }}>سجّل بضاعة واردة من المورّد. عند الاستلام تُضاف الكميات إلى المخزون تلقائياً مع تسجيلها في سجل الحركة.</p>
+                  <form onSubmit={submitPurchaseOrder} style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
+                    <input type="text" placeholder="اسم المورّد (اختياري)" value={poDraft.supplier} onChange={e => setPoDraft({ ...poDraft, supplier: e.target.value })}
+                      style={{ padding: '12px 15px', borderRadius: '8px', border: '1px solid var(--border-color)', background: 'var(--bg-color)', color: 'var(--text-primary)', maxWidth: '320px' }} />
+                    {poDraft.lines.map((line, i) => (
+                      <div key={i} style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap', alignItems: 'center' }}>
+                        <select value={line.sku} onChange={e => {
+                          const opt = allInventoryItems.find(it => it.sku === e.target.value);
+                          updatePoLine(i, { sku: e.target.value, productId: opt ? opt.baseId : '' });
+                        }} style={{ flex: '1 1 320px', padding: '10px', borderRadius: '8px', border: '1px solid var(--border-color)', background: 'var(--bg-color)', color: 'var(--text-primary)' }}>
+                          <option value="">-- اختر الصنف (SKU) --</option>
+                          {allInventoryItems.filter(it => it.sku).map(it => (
+                            <option key={it.sku} value={it.sku}>{it.title} / {it.size} ({it.sku})</option>
+                          ))}
+                        </select>
+                        <input type="number" min="1" value={line.qty} onChange={e => updatePoLine(i, { qty: e.target.value })} style={{ width: '90px', padding: '10px', borderRadius: '8px', border: '1px solid var(--border-color)', background: 'var(--bg-color)', color: 'var(--text-primary)' }} />
+                        <button type="button" onClick={() => removePoLine(i)} style={{ background: 'rgba(231,76,60,0.1)', border: 'none', color: '#e74c3c', borderRadius: '8px', padding: '0.5rem 0.8rem', cursor: 'pointer' }}><i className="fa-solid fa-xmark"></i></button>
+                      </div>
+                    ))}
+                    <div style={{ display: 'flex', gap: '0.75rem' }}>
+                      <button type="button" onClick={addPoLine} style={{ padding: '0.6rem 1rem', borderRadius: '8px', border: '1px dashed var(--border-color)', background: 'transparent', cursor: 'pointer', color: 'var(--text-primary)' }}><i className="fa-solid fa-plus"></i> إضافة صنف</button>
+                      <button type="submit" className="btn-primary" style={{ padding: '0.6rem 1.5rem' }}>حفظ أمر التوريد</button>
+                    </div>
+                  </form>
+                </div>
+
+                {/* PO list */}
+                <div style={{ background: 'var(--surface-color)', padding: '1.5rem', borderRadius: '16px', border: '1px solid var(--glass-border)' }}>
+                  <h3 style={{ marginTop: 0 }}>أوامر التوريد ({purchaseOrders.length})</h3>
+                  {purchaseOrders.length === 0 ? (
+                    <EmptyState icon="fa-dolly" text="لا توجد أوامر توريد." />
+                  ) : (
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
+                      {purchaseOrders.map(po => (
+                        <div key={po.id} style={{ padding: '1rem', borderRadius: '10px', background: 'var(--bg-color)', border: '1px solid var(--border-color)' }}>
+                          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '0.5rem' }}>
+                            <div>
+                              <strong>{po.supplier || 'مورّد غير محدد'}</strong>
+                              <span style={{ marginInlineStart: '10px', fontSize: '0.8rem', padding: '2px 10px', borderRadius: '20px', background: po.status === 'received' ? 'rgba(40,167,69,0.15)' : 'rgba(230,126,34,0.15)', color: po.status === 'received' ? '#28a745' : '#e67e22' }}>
+                                {po.status === 'received' ? 'تم الاستلام' : 'قيد الانتظار'}
+                              </span>
+                              <div style={{ fontSize: '0.8rem', color: 'var(--text-secondary)', marginTop: '4px' }}>
+                                {(po.lines || []).reduce((s, l) => s + (Number(l.qty) || 0), 0)} قطعة • {(po.lines || []).length} صنف • {po.createdAt ? new Date(po.createdAt).toLocaleDateString('en-GB') : ''}
+                              </div>
+                            </div>
+                            <div style={{ display: 'flex', gap: '0.5rem' }}>
+                              {po.status !== 'received' && (
+                                <button onClick={() => handleReceivePO(po.id)} style={{ padding: '0.5rem 1rem', background: '#28a745', color: '#fff', border: 'none', borderRadius: '8px', cursor: 'pointer', fontWeight: 'bold' }}><i className="fa-solid fa-check"></i> استلام</button>
+                              )}
+                              <button onClick={async () => { if (confirm('حذف أمر التوريد؟')) { await deletePurchaseOrder(po.id); loadPurchaseOrders(); } }} style={{ padding: '0.5rem 0.8rem', background: 'rgba(231,76,60,0.1)', color: '#e74c3c', border: 'none', borderRadius: '8px', cursor: 'pointer' }}><i className="fa-solid fa-trash"></i></button>
+                            </div>
+                          </div>
                         </div>
                       ))}
                     </div>

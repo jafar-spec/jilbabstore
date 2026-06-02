@@ -48,8 +48,18 @@ export default function CourierDashboard() {
 
   const updateOrderStatus = async (orderId, newStatus) => {
     try {
-      await updateOrderDoc(orderId, { status: newStatus });
-      setOrders(orders.map(order => 
+      // Status + stock fulfilment handled server-side (couriers can't write
+      // product docs directly under the tightened rules).
+      const token = await user.getIdToken();
+      const res = await fetch('/api/orders/transition', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+        body: JSON.stringify({ orderId, status: newStatus })
+      });
+      const data = await res.json();
+      if (!res.ok) { showToast(data.error || 'فشل تحديث الحالة', 'error'); return; }
+
+      setOrders(orders.map(order =>
         order.id === orderId ? { ...order, status: newStatus } : order
       ));
       showToast(`تم تحديث الحالة إلى: ${newStatus}`, 'success');
@@ -77,7 +87,7 @@ export default function CourierDashboard() {
 
         fetch('/api/send-email', {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
+          headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
           body: JSON.stringify({ to: customerEmail, subject, html: htmlContent })
         }).catch(err => console.error("Email error:", err));
       }

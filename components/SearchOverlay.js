@@ -4,7 +4,7 @@ import Link from 'next/link';
 import Image from 'next/image';
 import { useLanguage } from '@/context/LanguageContext';
 import { useRouter } from 'next/navigation';
-import { getProducts } from '@/lib/db';
+import { getProducts, matchesProduct } from '@/lib/db';
 
 export default function SearchOverlay({ isOpen, onClose }) {
   const { t, lang } = useLanguage();
@@ -29,17 +29,17 @@ export default function SearchOverlay({ isOpen, onClose }) {
   }, [isOpen, products.length]);
 
   useEffect(() => {
-    if (query.trim().length > 1) {
-      const lowerQuery = query.toLowerCase();
-      const filtered = products.filter(p => 
-        p.title?.toLowerCase().includes(lowerQuery) || 
-        p.description?.toLowerCase().includes(lowerQuery) ||
-        p.category?.toLowerCase().includes(lowerQuery)
-      );
-      setResults(filtered);
-    } else {
+    const q = query.trim().toLowerCase();
+    if (q.length < 2) {
       setResults([]);
+      return;
     }
+    // Debounce so we filter ~250ms after the user stops typing.
+    const handle = setTimeout(() => {
+      const filtered = products.filter(p => matchesProduct(p, q)).slice(0, 24);
+      setResults(filtered);
+    }, 250);
+    return () => clearTimeout(handle);
   }, [query, products]);
 
   return (
