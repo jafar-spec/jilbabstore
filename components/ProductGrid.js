@@ -179,7 +179,7 @@ export default function ProductGrid({ title, products, subsections = [], emptyMe
               const hasVariants = product.variants && product.variants.length > 0;
               return (
               <div className="product-card reveal" key={product.id}>
-                  <div className="product-image-container" style={{ position: 'relative', height: '300px', width: '100%' }}>
+                  <div className="product-image-container" style={{ position: 'relative', width: '100%', aspectRatio: '3 / 4' }}>
                     <Link href={`/product/${product.id}`} className="product-image" style={{ width: '100%', height: '100%', position: 'relative', display: 'block' }}>
                       <Image 
                         src={(product.images && product.images.length > 0) ? product.images[0] : (product.image || '/assets/black_jilbab_1779926556174.png')} 

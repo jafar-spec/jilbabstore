@@ -38,7 +38,7 @@ export default function RecentlyViewed({ excludeId, ratings = {} }) {
       <div className="product-grid">
         {items.map(product => (
           <div className="product-card" key={product.id}>
-            <div className="product-image-container" style={{ position: 'relative', height: '300px', width: '100%' }}>
+            <div className="product-image-container" style={{ position: 'relative', width: '100%', aspectRatio: '3 / 4' }}>
               <Link href={`/product/${product.id}`} className="product-image" style={{ width: '100%', height: '100%', position: 'relative', display: 'block' }}>
                 <Image
                   src={(product.images && product.images[0]) || product.image || '/assets/black_jilbab_1779926556174.png'}

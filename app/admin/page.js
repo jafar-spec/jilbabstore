@@ -13,7 +13,7 @@ import {
   getAllOrders, getProducts, createProduct, updateProduct, deleteProductDoc, updateOrderDoc, deleteOrderDoc,
   getSections, createSection, deleteSectionDoc, getNewsletterSubscribers,
   getStoreSettings, updateStoreSettings,
-  getAllPromoCodes, addPromoCode, deletePromoCode,
+  getAllPromoCodes, addPromoCode, deletePromoCode, upsertWelcomePromo,
   getAllTickets, updateTicket, deleteTicket, updateSectionSubsections,
   updateOrderRouteSequence, getAllReviews, updateReview, deleteReview,
   setVariantStock, adjustVariantStock, getStockMovements,
@@ -1032,6 +1032,11 @@ export default function AdminDashboard() {
     setIsSavingCms(true);
     try {
       await updateStoreSettings(cmsSettings);
+      // Keep the welcome coupon in sync with the popup config.
+      const wp = cmsSettings.welcomePromo;
+      if (wp?.enabled && wp.code && Number(wp.percent) > 0) {
+        await upsertWelcomePromo(wp.code, wp.percent);
+      }
       showToast("تم تحديث إعدادات المتجر بنجاح!", "success");
     } catch (error) {
       console.error(error);
@@ -2235,6 +2240,29 @@ export default function AdminDashboard() {
                         <input type="tel" dir="ltr" placeholder="+9725XXXXXXXX" value={cmsSettings.alertPhone || ''} onChange={e => setCmsSettings({...cmsSettings, alertPhone: e.target.value.trim()})} className="admin-input" />
                       </div>
                     </div>
+                  </div>
+
+                  {/* Newsletter welcome popup + first-order discount */}
+                  <div style={{ background: 'var(--bg-color)', padding: '1.5rem', borderRadius: '8px', border: '1px solid var(--glass-border)', marginTop: '1.5rem' }}>
+                    <h4 style={{ marginTop: 0 }}><i className="fa-solid fa-gift" style={{ marginInlineEnd: '8px', color: 'var(--accent-color)' }}></i>نافذة الاشتراك وخصم أول طلب</h4>
+                    <label style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '1rem', cursor: 'pointer' }}>
+                      <input type="checkbox" checked={cmsSettings.welcomePromo?.enabled ?? true}
+                        onChange={e => setCmsSettings({ ...cmsSettings, welcomePromo: { ...(cmsSettings.welcomePromo || {}), enabled: e.target.checked } })} />
+                      <span>تفعيل نافذة الاشتراك مع خصم على أول طلب</span>
+                    </label>
+                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: '1rem' }}>
+                      <div>
+                        <label className="admin-label">كود الخصم</label>
+                        <input type="text" dir="ltr" placeholder="WELCOME10" value={cmsSettings.welcomePromo?.code || ''}
+                          onChange={e => setCmsSettings({ ...cmsSettings, welcomePromo: { ...(cmsSettings.welcomePromo || {}), code: e.target.value.toUpperCase().trim() } })} className="admin-input" />
+                      </div>
+                      <div>
+                        <label className="admin-label">نسبة الخصم (%)</label>
+                        <input type="number" min="1" max="90" value={cmsSettings.welcomePromo?.percent || 10}
+                          onChange={e => setCmsSettings({ ...cmsSettings, welcomePromo: { ...(cmsSettings.welcomePromo || {}), percent: Number(e.target.value) } })} className="admin-input" />
+                      </div>
+                    </div>
+                    <p style={{ fontSize: '0.78rem', color: 'var(--text-secondary)', marginBottom: 0 }}>عند الحفظ يُنشأ/يُحدّث كود خصم لأول طلب فقط تلقائياً، ويظهر للعميل بعد الاشتراك.</p>
                   </div>
 
                   {/* Editable SMS templates */}

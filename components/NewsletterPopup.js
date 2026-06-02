@@ -13,12 +13,18 @@ const HIDDEN_PATHS = ['/admin', '/courier', '/checkout', '/login', '/profile'];
 export default function NewsletterPopup() {
   const pathname = usePathname();
   const { showToast } = useToast();
-  const { t } = useLanguage();
+  const { t, storeSettings } = useLanguage();
   const [open, setOpen] = useState(false);
   const [email, setEmail] = useState('');
   const [phone, setPhone] = useState('');
   const [loading, setLoading] = useState(false);
+  const [doneCode, setDoneCode] = useState(null); // reveal coupon after signup
+  const [copied, setCopied] = useState(false);
   const panelRef = useRef(null);
+
+  // First-order welcome discount (configurable in admin; sensible default).
+  const welcome = storeSettings?.welcomePromo || { enabled: true, code: 'WELCOME10', percent: 10 };
+  const hasWelcome = welcome.enabled !== false && welcome.code && Number(welcome.percent) > 0;
 
   useEffect(() => {
     if (HIDDEN_PATHS.some(p => pathname?.startsWith(p))) return;
@@ -54,8 +60,12 @@ export default function NewsletterPopup() {
     try {
       await subscribeToNewsletter(email.trim(), phone.trim());
       persist({ subscribed: true });
-      showToast(t('newsletterSuccess') || 'تم اشتراكك بنجاح!', 'success');
-      setOpen(false);
+      if (hasWelcome) {
+        setDoneCode(welcome.code);          // reveal the coupon, keep popup open
+      } else {
+        showToast(t('newsletterSuccess') || 'تم اشتراكك بنجاح!', 'success');
+        setOpen(false);
+      }
     } catch (err) {
       showToast(t('newsletterError') || 'حدث خطأ، حاول مرة أخرى', 'error');
     } finally {
@@ -82,30 +92,59 @@ export default function NewsletterPopup() {
           <i className="fa-solid fa-xmark"></i>
         </button>
 
-        <div style={{ fontSize: '2.2rem', marginBottom: '0.5rem' }}>✨</div>
-        <h2 style={{ margin: '0 0 0.5rem', fontSize: '1.4rem' }}>انضمي إلى عائلة جلباب</h2>
-        <p style={{ color: 'var(--text-secondary)', fontSize: '0.92rem', lineHeight: 1.7, margin: '0 0 1.25rem' }}>
-          اشتركي ليصلك كل جديد وأحدث العروض والتشكيلات أولاً بأول — عبر البريد أو رسائل SMS.
-        </p>
+        {doneCode ? (
+          <>
+            <div style={{ fontSize: '2.4rem', marginBottom: '0.5rem' }}>🎉</div>
+            <h2 style={{ margin: '0 0 0.4rem', fontSize: '1.35rem' }}>تم اشتراكك بنجاح!</h2>
+            <p style={{ color: 'var(--text-secondary)', fontSize: '0.92rem', lineHeight: 1.7, margin: '0 0 1rem' }}>
+              إليكِ كود خصم {welcome.percent}% على أول طلب — استخدميه عند الدفع:
+            </p>
+            <button
+              type="button"
+              onClick={() => { navigator.clipboard?.writeText(doneCode).then(() => { setCopied(true); setTimeout(() => setCopied(false), 1800); }).catch(() => {}); }}
+              aria-label="نسخ كود الخصم"
+              style={{ display: 'inline-flex', alignItems: 'center', gap: '10px', padding: '0.75rem 1.5rem', borderRadius: '12px', border: '2px dashed var(--accent-color)', background: 'rgba(124,58,237,0.06)', cursor: 'pointer', fontSize: '1.3rem', fontWeight: 800, letterSpacing: '0.15em', color: 'var(--accent-color)' }}
+            >
+              {doneCode}
+              <i className={copied ? 'fa-solid fa-check' : 'fa-regular fa-copy'} style={{ fontSize: '0.9rem' }}></i>
+            </button>
+            <div style={{ fontSize: '0.78rem', color: 'var(--text-secondary)', marginTop: '8px' }}>{copied ? 'تم النسخ ✓' : 'اضغطي لنسخ الكود'}</div>
+            <button onClick={() => setOpen(false)} className="btn-primary" style={{ marginTop: '1.25rem', padding: '0.8rem 2rem' }}>
+              تسوّقي الآن
+            </button>
+          </>
+        ) : (
+          <>
+            <div style={{ fontSize: '2.2rem', marginBottom: '0.5rem' }}>{hasWelcome ? '🎁' : '✨'}</div>
+            <h2 style={{ margin: '0 0 0.5rem', fontSize: '1.4rem' }}>
+              {hasWelcome ? `خصم ${welcome.percent}% على أول طلب` : 'انضمي إلى عائلة جلباب'}
+            </h2>
+            <p style={{ color: 'var(--text-secondary)', fontSize: '0.92rem', lineHeight: 1.7, margin: '0 0 1.25rem' }}>
+              {hasWelcome
+                ? `اشتركي الآن واحصلي على خصم ${welcome.percent}% على أول طلب، ويصلك كل جديد وأحدث العروض عبر البريد أو SMS.`
+                : 'اشتركي ليصلك كل جديد وأحدث العروض والتشكيلات أولاً بأول — عبر البريد أو رسائل SMS.'}
+            </p>
 
-        <form onSubmit={submit} style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
-          <input
-            type="email" required dir="ltr" placeholder={t('email') || 'البريد الإلكتروني'}
-            value={email} onChange={(e) => setEmail(e.target.value)} aria-label="البريد الإلكتروني"
-            style={{ padding: '0.8rem 1rem', borderRadius: '10px', border: '1px solid var(--border-color)', background: 'var(--bg-color)', color: 'var(--text-primary)', fontFamily: 'inherit', fontSize: '0.95rem' }}
-          />
-          <input
-            type="tel" dir="ltr" placeholder="05XXXXXXXX (اختياري — للعروض عبر SMS)"
-            value={phone} onChange={(e) => setPhone(e.target.value)} aria-label="رقم الجوال (اختياري)"
-            style={{ padding: '0.8rem 1rem', borderRadius: '10px', border: '1px solid var(--border-color)', background: 'var(--bg-color)', color: 'var(--text-primary)', fontFamily: 'inherit', fontSize: '0.9rem' }}
-          />
-          <button type="submit" className="btn-primary" disabled={loading} style={{ padding: '0.9rem', fontSize: '1rem', opacity: loading ? 0.7 : 1 }}>
-            {loading ? '...' : 'اشتركي الآن'}
-          </button>
-        </form>
-        <button onClick={dismiss} style={{ marginTop: '0.9rem', background: 'none', border: 'none', color: 'var(--text-secondary)', fontSize: '0.82rem', cursor: 'pointer', textDecoration: 'underline' }}>
-          لا، شكراً
-        </button>
+            <form onSubmit={submit} style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
+              <input
+                type="email" required dir="ltr" placeholder={t('email') || 'البريد الإلكتروني'}
+                value={email} onChange={(e) => setEmail(e.target.value)} aria-label="البريد الإلكتروني"
+                style={{ padding: '0.8rem 1rem', borderRadius: '10px', border: '1px solid var(--border-color)', background: 'var(--bg-color)', color: 'var(--text-primary)', fontFamily: 'inherit', fontSize: '0.95rem' }}
+              />
+              <input
+                type="tel" dir="ltr" placeholder="05XXXXXXXX (اختياري — للعروض عبر SMS)"
+                value={phone} onChange={(e) => setPhone(e.target.value)} aria-label="رقم الجوال (اختياري)"
+                style={{ padding: '0.8rem 1rem', borderRadius: '10px', border: '1px solid var(--border-color)', background: 'var(--bg-color)', color: 'var(--text-primary)', fontFamily: 'inherit', fontSize: '0.9rem' }}
+              />
+              <button type="submit" className="btn-primary" disabled={loading} style={{ padding: '0.9rem', fontSize: '1rem', opacity: loading ? 0.7 : 1 }}>
+                {loading ? '...' : (hasWelcome ? 'احصلي على الخصم' : 'اشتركي الآن')}
+              </button>
+            </form>
+            <button onClick={dismiss} style={{ marginTop: '0.9rem', background: 'none', border: 'none', color: 'var(--text-secondary)', fontSize: '0.82rem', cursor: 'pointer', textDecoration: 'underline' }}>
+              لا، شكراً
+            </button>
+          </>
+        )}
       </div>
     </div>
   );
