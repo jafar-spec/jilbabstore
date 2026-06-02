@@ -1,10 +1,11 @@
 "use client";
 import { useEffect } from 'react';
-import { getApp } from 'firebase/app';
+import { getApp, getApps } from 'firebase/app';
 
-// Initializes Firebase App Check (reCAPTCHA v3) on the customer app. Safe no-op
-// if the site key isn't set. Enforcement is toggled separately in the Firebase
-// console (App Check → enforce), so adding this can't break traffic on its own.
+// Initializes Firebase App Check (reCAPTCHA v3) on BOTH Firebase apps — the
+// customer (default) app and the 'staff' app — so that if App Check enforcement
+// is enabled, neither the storefront nor the admin/courier panel is blocked.
+// Safe no-op when the site key isn't set.
 export default function AppCheckInit() {
   useEffect(() => {
     const siteKey = process.env.NEXT_PUBLIC_RECAPTCHA_SITE_KEY;
@@ -12,12 +13,17 @@ export default function AppCheckInit() {
     (async () => {
       try {
         const { initializeAppCheck, ReCaptchaV3Provider } = await import('firebase/app-check');
-        initializeAppCheck(getApp(), {
-          provider: new ReCaptchaV3Provider(siteKey),
-          isTokenAutoRefreshEnabled: true,
-        });
+        const apps = [getApp(), getApps().find(a => a.name === 'staff')].filter(Boolean);
+        for (const app of apps) {
+          try {
+            initializeAppCheck(app, {
+              provider: new ReCaptchaV3Provider(siteKey),
+              isTokenAutoRefreshEnabled: true,
+            });
+          } catch { /* already initialized for this app */ }
+        }
       } catch (e) {
-        // Already initialized or unsupported environment — ignore.
+        // App Check SDK unavailable / unsupported environment — ignore.
       }
     })();
   }, []);
