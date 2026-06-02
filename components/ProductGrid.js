@@ -22,8 +22,21 @@ export default function ProductGrid({ title, products, subsections = [], emptyMe
   // Distinct categories present in the current product set (for the filter).
   const categories = [...new Set((products || []).map(p => p.category).filter(Boolean))];
 
+  // Match a product to the active subsection by its subsectionId, OR — for
+  // legacy products that were only tagged with a free-text `category` — by
+  // matching that category against the subsection's Arabic/English name.
+  const activeSub = subsections.find(s => s.id === activeSubsection);
+  const matchesSubsection = (p) => {
+    if (p.subsectionId) return p.subsectionId === activeSubsection;
+    if (!activeSub) return false;
+    const cat = (p.category || '').toLowerCase().trim();
+    if (!cat) return false;
+    return cat === (activeSub.name_en || '').toLowerCase().trim()
+        || cat === (activeSub.name_ar || '').toLowerCase().trim();
+  };
+
   let filteredProducts = activeSubsection
-    ? products.filter(p => p.subsectionId === activeSubsection)
+    ? products.filter(matchesSubsection)
     : [...products];
 
   // Apply Price + Category Filters
