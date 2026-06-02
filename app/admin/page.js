@@ -24,6 +24,7 @@ import AdminMap from '@/components/AdminMap';
 import { useAuth } from '@/context/AuthContext';
 import { uploadDataUrl } from '@/lib/uploads';
 import { PAGES, PAGE_DEFAULTS } from '@/lib/pageContent';
+import { SMS_TEMPLATE_DEFS, DEFAULT_SMS_TEMPLATES } from '@/lib/smsTemplates';
 import { compressImage } from '@/lib/imageCompress';
 import EmptyState from '@/components/admin/EmptyState';
 
@@ -50,6 +51,8 @@ export default function AdminDashboard() {
   const [newsletterSubject, setNewsletterSubject] = useState('');
   const [newsletterMessage, setNewsletterMessage] = useState('');
   const [isSendingNewsletter, setIsSendingNewsletter] = useState(false);
+  const [smsBroadcast, setSmsBroadcast] = useState('');
+  const [isSendingSms, setIsSendingSms] = useState(false);
 
   // SECTIONS STATE
   const [newSection, setNewSection] = useState({ title_en: '', title_ar: '', order: 0 });
@@ -947,6 +950,34 @@ export default function AdminDashboard() {
     }
   };
 
+  const subscribersWithPhone = subscribers.filter(s => s.phone).length;
+
+  const handleSmsBroadcast = async () => {
+    if (!smsBroadcast.trim()) { showToast('اكتب نص الرسالة', 'error'); return; }
+    if (!confirm(`إرسال رسالة SMS إلى ${subscribersWithPhone} مشترك؟`)) return;
+    setIsSendingSms(true);
+    try {
+      const token = await user.getIdToken();
+      const res = await fetch('/api/admin/sms-broadcast', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+        body: JSON.stringify({ message: smsBroadcast })
+      });
+      const data = await res.json();
+      if (res.ok) {
+        showToast(`تم الإرسال إلى ${data.sent} من ${data.total}${data.failed ? ` (فشل ${data.failed})` : ''}`, 'success');
+        setSmsBroadcast('');
+      } else {
+        showToast(data.error || 'فشل الإرسال', 'error');
+      }
+    } catch (e) {
+      console.error(e);
+      showToast('فشل إرسال الحملة', 'error');
+    } finally {
+      setIsSendingSms(false);
+    }
+  };
+
   const handleSendNewsletter = async (e) => {
     e.preventDefault();
     if (selectedSubscribers.length === 0) {
@@ -1747,6 +1778,35 @@ export default function AdminDashboard() {
                   </form>
                 </div>
 
+                {/* SMS broadcast */}
+                <div style={{ background: 'var(--surface-color)', padding: '2rem', borderRadius: '16px', border: '1px solid var(--glass-border)', marginTop: '1.5rem' }}>
+                  <h3 style={{ marginTop: 0 }}><i className="fa-solid fa-comment-sms" style={{ marginInlineEnd: '8px', color: 'var(--accent-color)' }}></i>إرسال حملة SMS</h3>
+                  <div style={{ background: 'rgba(0,0,0,0.03)', padding: '1rem', borderRadius: '8px', color: 'var(--text-secondary)', marginBottom: '1rem' }}>
+                    <strong>المستلمون:</strong> {subscribersWithPhone} مشترك لديه رقم جوال
+                  </div>
+                  <textarea
+                    value={smsBroadcast}
+                    onChange={e => setSmsBroadcast(e.target.value)}
+                    className="admin-input"
+                    rows="4"
+                    maxLength={600}
+                    placeholder="عرض خاص لهذا الأسبوع! ..."
+                    style={{ resize: 'vertical' }}
+                  ></textarea>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: '0.5rem', flexWrap: 'wrap', gap: '0.5rem' }}>
+                    <span style={{ fontSize: '0.78rem', color: 'var(--text-secondary)' }}>{smsBroadcast.length}/600 حرف</span>
+                    <button
+                      type="button"
+                      onClick={handleSmsBroadcast}
+                      className="btn-primary"
+                      disabled={isSendingSms || subscribersWithPhone === 0 || !smsBroadcast.trim()}
+                      style={{ opacity: (isSendingSms || subscribersWithPhone === 0 || !smsBroadcast.trim()) ? 0.6 : 1 }}
+                    >
+                      {isSendingSms ? <><i className="fa-solid fa-spinner fa-spin"></i> جاري الإرسال...</> : <><i className="fa-solid fa-comment-sms"></i> إرسال SMS للمشتركين</>}
+                    </button>
+                  </div>
+                </div>
+
               </div>
             )}
 
@@ -2174,6 +2234,30 @@ export default function AdminDashboard() {
                         <input type="tel" dir="ltr" placeholder="+9725XXXXXXXX" value={cmsSettings.alertPhone || ''} onChange={e => setCmsSettings({...cmsSettings, alertPhone: e.target.value.trim()})} className="admin-input" />
                       </div>
                     </div>
+                  </div>
+
+                  {/* Editable SMS templates */}
+                  <div style={{ background: 'var(--bg-color)', padding: '1.5rem', borderRadius: '8px', border: '1px solid var(--glass-border)', marginTop: '1.5rem' }}>
+                    <h4 style={{ marginTop: 0 }}><i className="fa-solid fa-comment-sms" style={{ marginInlineEnd: '8px', color: 'var(--accent-color)' }}></i>قوالب الرسائل النصية (SMS)</h4>
+                    <p style={{ fontSize: '0.8rem', color: 'var(--text-secondary)', marginTop: 0 }}>عدّل نص كل رسالة. استخدم العناصر النائبة بين الأقواس، وستُستبدل تلقائياً.</p>
+                    {SMS_TEMPLATE_DEFS.map(tpl => (
+                      <div key={tpl.key} style={{ marginBottom: '1rem' }}>
+                        <label className="admin-label" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '6px' }}>
+                          <span>{tpl.label}</span>
+                          <span dir="ltr" style={{ fontSize: '0.72rem', color: 'var(--text-secondary)', fontFamily: 'monospace' }}>{tpl.placeholders}</span>
+                        </label>
+                        <textarea
+                          value={(cmsSettings.smsTemplates?.[tpl.key]) ?? tpl.def}
+                          onChange={e => setCmsSettings({ ...cmsSettings, smsTemplates: { ...(cmsSettings.smsTemplates || {}), [tpl.key]: e.target.value } })}
+                          className="admin-input"
+                          style={{ minHeight: '64px' }}
+                        />
+                      </div>
+                    ))}
+                    <button type="button" onClick={() => setCmsSettings({ ...cmsSettings, smsTemplates: { ...DEFAULT_SMS_TEMPLATES } })}
+                      style={{ padding: '0.5rem 1rem', borderRadius: '8px', border: '1px solid var(--border-color)', background: 'transparent', cursor: 'pointer', color: 'var(--text-secondary)' }}>
+                      استعادة النصوص الافتراضية
+                    </button>
                   </div>
 
                   {/* ─── SOCIAL MEDIA LINKS ─── */}

@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { adminAuth, adminDb } from '@/lib/firebaseAdmin';
 import { sendSms } from '@/lib/sms';
+import { resolveSmsTemplates, fillTemplate } from '@/lib/smsTemplates';
 
 // Staff-only order status transitions with atomic stock lifecycle.
 //   reserved  → (delivered)  fulfill : stock -= qty, reserved -= qty
@@ -103,13 +104,14 @@ export async function POST(req) {
       adminDb.collection('stock_movements').add(m).catch(() => {});
     }
 
-    // SMS the customer on delivery milestones (best-effort; no-op if Twilio
-    // isn't fully configured).
-    if (customerPhone) {
+    // SMS the customer on delivery milestones, using admin-editable templates.
+    if (customerPhone && (status === 'جاري التوصيل' || status === 'تم التوصيل')) {
       const num = orderId.slice(0, 8).toUpperCase();
-      let body = null;
-      if (status === 'جاري التوصيل') body = `طلبك #${num} في الطريق إليك الآن! متجر جلباب`;
-      else if (status === 'تم التوصيل') body = `تم توصيل طلبك #${num} بنجاح. شكراً لتسوقك من متجر جلباب!`;
+      const settingsSnap = await adminDb.collection('store_settings').doc('main_settings').get();
+      const settings = settingsSnap.exists ? settingsSnap.data() : {};
+      const tpl = resolveSmsTemplates(settings.smsTemplates);
+      const store = settings.storeName || 'متجر جلباب';
+      const body = fillTemplate(status === 'جاري التوصيل' ? tpl.outForDelivery : tpl.delivered, { orderNum: num, store });
       if (body) sendSms(customerPhone, body).catch(() => {});
     }
 

@@ -31,6 +31,7 @@ export default function Footer() {
   const { t, storeSettings } = useLanguage();
   const { showToast } = useToast();
   const [email, setEmail] = useState('');
+  const [phone, setPhone] = useState('');
   const [loading, setLoading] = useState(false);
 
   const socials = storeSettings?.socials || {};
@@ -40,9 +41,10 @@ export default function Footer() {
     if (!email) return;
     setLoading(true);
     try {
-      await subscribeToNewsletter(email);
+      await subscribeToNewsletter(email, phone);
       showToast(t('newsletterSuccess'), 'success');
       setEmail('');
+      setPhone('');
     } catch (err) {
       console.error(err);
       showToast(t('newsletterError'), 'error');
@@ -122,18 +124,29 @@ export default function Footer() {
 
           <h4 style={{ fontSize: '0.85rem', marginBottom: '1.5rem', fontWeight: '600', textTransform: 'uppercase', letterSpacing: '0.1em' }}>{t('newsletterTitle')}</h4>
           <p style={{ color: 'var(--text-secondary)', fontSize: '0.95rem', marginBottom: '1rem', lineHeight: '1.8' }}>{t('newsletterSubtitle')}</p>
-          <form onSubmit={handleSubscribe} style={{ display: 'flex', borderBottom: '1px solid var(--text-primary)', paddingBottom: '0.5rem', marginTop: '1rem' }}>
+          <form onSubmit={handleSubscribe} style={{ marginTop: '1rem', display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
+            <div style={{ display: 'flex', borderBottom: '1px solid var(--text-primary)', paddingBottom: '0.5rem' }}>
+              <input
+                type="email"
+                placeholder={t('newsletterPlaceholder')}
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+                required
+                style={{ background: 'transparent', border: 'none', outline: 'none', width: '100%', fontFamily: 'inherit', fontSize: '0.9rem', color: 'var(--text-primary)' }}
+              />
+              <button disabled={loading} type="submit" style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-primary)', textTransform: 'uppercase', fontSize: '0.8rem', letterSpacing: '0.1em' }}>
+                {loading ? '...' : t('subscribe')}
+              </button>
+            </div>
             <input
-              type="email"
-              placeholder={t('newsletterPlaceholder')}
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
-              required
-              style={{ background: 'transparent', border: 'none', outline: 'none', width: '100%', fontFamily: 'inherit', fontSize: '0.9rem', color: 'var(--text-primary)' }}
+              type="tel"
+              dir="ltr"
+              placeholder={t('newsletterPhone') || 'رقم الجوال لاستلام العروض عبر SMS (اختياري)'}
+              value={phone}
+              onChange={(e) => setPhone(e.target.value)}
+              aria-label="رقم الجوال (اختياري)"
+              style={{ background: 'transparent', border: 'none', outline: 'none', borderBottom: '1px solid var(--border-color)', paddingBottom: '0.4rem', width: '100%', fontFamily: 'inherit', fontSize: '0.85rem', color: 'var(--text-primary)' }}
             />
-            <button disabled={loading} type="submit" style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-primary)', textTransform: 'uppercase', fontSize: '0.8rem', letterSpacing: '0.1em' }}>
-              {loading ? '...' : t('subscribe')}
-            </button>
           </form>
         </div>
 
