@@ -1,12 +1,13 @@
 "use client";
 
-import { createContext, useState, useContext, useEffect } from 'react';
+import { createContext, useState, useContext, useEffect, useRef } from 'react';
 
 const CartContext = createContext();
 
 export function CartProvider({ children }) {
   const [cart, setCart] = useState([]);
   const [isCartOpen, setIsCartOpen] = useState(false);
+  const hydrated = useRef(false);
 
   // Load from localStorage on mount (mocking persistence for now)
   useEffect(() => {
@@ -14,10 +15,13 @@ export function CartProvider({ children }) {
     if (savedCart) {
       try { setCart(JSON.parse(savedCart)); } catch (e) {}
     }
+    hydrated.current = true;
   }, []);
 
-  // Save to localStorage when cart changes
+  // Save to localStorage when cart changes (skip until initial load completes
+  // so the empty default state can't overwrite a saved cart)
   useEffect(() => {
+    if (!hydrated.current) return;
     localStorage.setItem('cart', JSON.stringify(cart));
   }, [cart]);
 
@@ -83,8 +87,8 @@ export function CartProvider({ children }) {
     setCart([]);
   };
 
-  const cartCount = cart.reduce((sum, item) => sum + item.quantity, 0);
-  const cartTotal = cart.reduce((sum, item) => sum + item.price * item.quantity, 0);
+  const cartCount = cart.reduce((sum, item) => sum + (Number(item.quantity) || 0), 0);
+  const cartTotal = cart.reduce((sum, item) => sum + (Number(item.price) || 0) * (Number(item.quantity) || 0), 0);
 
   return (
     <CartContext.Provider value={{ cart, addToCart, removeFromCart, updateQuantity, isCartOpen, toggleCart, closeCart, clearCart, cartCount, cartTotal }}>

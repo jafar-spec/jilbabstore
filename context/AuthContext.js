@@ -17,15 +17,6 @@ export function AuthProvider({ children }) {
   const [role, setRole] = useState(null);
 
   useEffect(() => {
-    // Legacy courier123 session
-    if (typeof window !== 'undefined' && sessionStorage.getItem('store_auth_role') === 'courier') {
-      setUser({ uid: 'legacy_courier', isLegacy: true });
-      setRole('courier');
-      setLoading(false);
-      const unsubscribe = onAuthStateChanged(auth, () => {});
-      return unsubscribe;
-    }
-
     const unsubscribe = onAuthStateChanged(auth, async (user) => {
       if (user) {
         setUser(user);
@@ -63,9 +54,6 @@ export function AuthProvider({ children }) {
   };
 
   const logout = async () => {
-    if (typeof window !== 'undefined') {
-      sessionStorage.removeItem('store_auth_role');
-    }
     setUser(null);
     setRole(null);
     return signOut(auth);

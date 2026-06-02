@@ -100,6 +100,11 @@ export default function AdminDashboard() {
   const [courierRouteMode, setCourierRouteMode] = useState(false);
   const [routeOrders, setRouteOrders] = useState([]);
 
+  // STAFF / COURIERS STATE
+  const [couriers, setCouriers] = useState([]);
+  const [newCourier, setNewCourier] = useState({ email: '', password: '', name: '' });
+  const [courierBusy, setCourierBusy] = useState(false);
+
 
 
   // CMS STATE
@@ -197,6 +202,72 @@ export default function AdminDashboard() {
     await logout();
     // Full reload to clear all cached state. replaceState prevents back-button returning here.
     window.location.replace('/login');
+  };
+
+  // --- COURIER / STAFF MANAGEMENT ---
+  const fetchCouriers = async () => {
+    try {
+      const token = await user.getIdToken();
+      const res = await fetch('/api/admin/couriers', { headers: { Authorization: `Bearer ${token}` } });
+      const data = await res.json();
+      if (res.ok) setCouriers(data.couriers || []);
+      else showToast(data.error || 'فشل تحميل المندوبين', 'error');
+    } catch (err) {
+      console.error('Error fetching couriers:', err);
+      showToast('فشل تحميل المندوبين', 'error');
+    }
+  };
+
+  const handleAddCourier = async (e) => {
+    e.preventDefault();
+    if (!newCourier.email || newCourier.password.length < 6) {
+      showToast('أدخل بريداً إلكترونياً وكلمة مرور (٦ أحرف على الأقل)', 'error');
+      return;
+    }
+    setCourierBusy(true);
+    try {
+      const token = await user.getIdToken();
+      const res = await fetch('/api/admin/couriers', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+        body: JSON.stringify(newCourier)
+      });
+      const data = await res.json();
+      if (res.ok) {
+        showToast('تمت إضافة المندوب بنجاح', 'success');
+        setNewCourier({ email: '', password: '', name: '' });
+        fetchCouriers();
+      } else {
+        showToast(data.error || 'فشل إضافة المندوب', 'error');
+      }
+    } catch (err) {
+      console.error('Error adding courier:', err);
+      showToast('فشل إضافة المندوب', 'error');
+    } finally {
+      setCourierBusy(false);
+    }
+  };
+
+  const handleDeleteCourier = async (uid, email) => {
+    if (!confirm(`حذف المندوب ${email}؟ لن يتمكن من تسجيل الدخول بعد الآن.`)) return;
+    try {
+      const token = await user.getIdToken();
+      const res = await fetch('/api/admin/couriers', {
+        method: 'DELETE',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+        body: JSON.stringify({ uid })
+      });
+      const data = await res.json();
+      if (res.ok) {
+        showToast('تم حذف المندوب', 'success');
+        fetchCouriers();
+      } else {
+        showToast(data.error || 'فشل حذف المندوب', 'error');
+      }
+    } catch (err) {
+      console.error('Error deleting courier:', err);
+      showToast('فشل حذف المندوب', 'error');
+    }
   };
 
 
@@ -565,7 +636,7 @@ export default function AdminDashboard() {
 
     const y = 30;
     
-    doc.autoTable({
+    autoTable(doc, {
       head: [tableColumn],
       body: tableRows,
       startY: y,
@@ -878,6 +949,9 @@ export default function AdminDashboard() {
               <button onClick={() => setActiveTab('customers')} style={navButtonStyle(activeTab === 'customers')}>
                 <i className="fa-solid fa-users" style={{ marginLeft: '10px' }}></i> قاعدة العملاء والمشتريات
               </button>
+              <button onClick={() => { setActiveTab('couriers'); fetchCouriers(); }} style={navButtonStyle(activeTab === 'couriers')}>
+                <i className="fa-solid fa-truck-fast" style={{ marginLeft: '10px' }}></i> المندوبون
+              </button>
             </>
           )}
 
@@ -904,7 +978,8 @@ export default function AdminDashboard() {
               activeTab === 'cms' ? 'إدارة المحتوى (CMS)' :
               activeTab === 'promos' ? 'كوبونات الخصم والترويج' :
               activeTab === 'customers' ? 'قاعدة بيانات العملاء والمشتريات' :
-              activeTab === 'orders' ? 'إدارة الطلبات الواردة' : 
+              activeTab === 'couriers' ? 'إدارة المندوبين' :
+              activeTab === 'orders' ? 'إدارة الطلبات الواردة' :
               activeTab === 'delivery' ? 'طلبات التوصيل الخاصة بك' : 'بيانات التوصيل والتوزيع'}
           </h1>
           
@@ -2159,14 +2234,14 @@ export default function AdminDashboard() {
                           return (
                             <tr key={review.id} style={{ borderBottom: '1px solid var(--glass-border)', opacity: review.isHidden ? 0.6 : 1 }}>
                               <td style={{ padding: '1rem', fontWeight: 'bold' }}>{prod ? prod.title : review.productId}</td>
-                              <td style={{ padding: '1rem' }}>{review.userName}</td>
+                              <td style={{ padding: '1rem' }}>{review.name}</td>
                               <td style={{ padding: '1rem', color: '#f1c40f' }}>
                                 {[...Array(5)].map((_, i) => (
                                   <i key={i} className={`fa-solid fa-star`} style={{ color: i < review.rating ? '#f1c40f' : '#e0e0e0', fontSize: '0.9rem' }}></i>
                                 ))}
                               </td>
-                              <td style={{ padding: '1rem', maxWidth: '300px', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }} title={review.comment}>
-                                {review.comment}
+                              <td style={{ padding: '1rem', maxWidth: '300px', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }} title={review.text}>
+                                {review.text}
                               </td>
                               <td style={{ padding: '1rem' }}>
                                 <span style={{ padding: '4px 8px', borderRadius: '4px', fontSize: '0.8rem', background: review.isHidden ? '#fdecea' : '#eafaf1', color: review.isHidden ? '#e74c3c' : '#27ae60' }}>
@@ -2311,6 +2386,59 @@ export default function AdminDashboard() {
             {/* MAP TAB */}
             {activeTab === 'map' && role === 'operator' && (
               <AdminMap orders={orders} />
+            )}
+
+            {/* COURIERS / STAFF TAB */}
+            {activeTab === 'couriers' && role === 'operator' && (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '2rem', maxWidth: '800px' }}>
+                {/* Add courier form */}
+                <div style={{ background: 'var(--surface-color)', padding: '1.5rem', borderRadius: '16px', border: '1px solid var(--glass-border)' }}>
+                  <h3 style={{ marginTop: 0, marginBottom: '0.5rem' }}>
+                    <i className="fa-solid fa-user-plus" style={{ marginLeft: '8px', color: 'var(--accent-color)' }}></i>
+                    إضافة مندوب جديد
+                  </h3>
+                  <p style={{ color: 'var(--text-secondary)', fontSize: '0.85rem', marginTop: 0 }}>
+                    سيستخدم المندوب هذا البريد وكلمة المرور لتسجيل الدخول إلى بوابة المندوبين.
+                  </p>
+                  <form onSubmit={handleAddCourier} style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
+                    <input type="text" placeholder="اسم المندوب (اختياري)" value={newCourier.name}
+                      onChange={e => setNewCourier({ ...newCourier, name: e.target.value })}
+                      style={{ padding: '12px 15px', borderRadius: '8px', border: '1px solid var(--border-color)', background: 'var(--bg-color)', color: 'var(--text-primary)' }} />
+                    <input type="email" placeholder="البريد الإلكتروني" value={newCourier.email} dir="ltr"
+                      onChange={e => setNewCourier({ ...newCourier, email: e.target.value.trim() })}
+                      style={{ padding: '12px 15px', borderRadius: '8px', border: '1px solid var(--border-color)', background: 'var(--bg-color)', color: 'var(--text-primary)' }} />
+                    <input type="text" placeholder="كلمة المرور (٦ أحرف على الأقل)" value={newCourier.password} dir="ltr"
+                      onChange={e => setNewCourier({ ...newCourier, password: e.target.value })}
+                      style={{ padding: '12px 15px', borderRadius: '8px', border: '1px solid var(--border-color)', background: 'var(--bg-color)', color: 'var(--text-primary)' }} />
+                    <button type="submit" className="btn-primary" disabled={courierBusy} style={{ padding: '0.9rem', opacity: courierBusy ? 0.7 : 1 }}>
+                      {courierBusy ? <><i className="fa-solid fa-spinner fa-spin"></i> جاري الإضافة...</> : <><i className="fa-solid fa-plus"></i> إضافة المندوب</>}
+                    </button>
+                  </form>
+                </div>
+
+                {/* Couriers list */}
+                <div style={{ background: 'var(--surface-color)', padding: '1.5rem', borderRadius: '16px', border: '1px solid var(--glass-border)' }}>
+                  <h3 style={{ marginTop: 0 }}>المندوبون الحاليون ({couriers.length})</h3>
+                  {couriers.length === 0 ? (
+                    <p style={{ color: 'var(--text-secondary)', textAlign: 'center', padding: '1.5rem' }}>لا يوجد مندوبون بعد. أضف مندوباً من النموذج بالأعلى.</p>
+                  ) : (
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
+                      {couriers.map(c => (
+                        <div key={c.uid} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '0.9rem 1rem', borderRadius: '10px', background: 'var(--bg-color)', border: '1px solid var(--border-color)' }}>
+                          <div>
+                            <div style={{ fontWeight: 'bold' }}>{c.name || 'مندوب'}</div>
+                            <div style={{ color: 'var(--text-secondary)', fontSize: '0.85rem' }} dir="ltr">{c.email}</div>
+                          </div>
+                          <button onClick={() => handleDeleteCourier(c.uid, c.email)}
+                            style={{ padding: '0.5rem 1rem', background: 'rgba(231,76,60,0.1)', border: '1px solid #e74c3c', borderRadius: '8px', color: '#e74c3c', cursor: 'pointer', fontWeight: 'bold' }}>
+                            <i className="fa-solid fa-trash" style={{ marginLeft: '6px' }}></i> حذف
+                          </button>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              </div>
             )}
 
           </div>

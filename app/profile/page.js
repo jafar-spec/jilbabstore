@@ -481,7 +481,7 @@ export default function ProfilePage() {
                             </div>
                             <div style={{ fontSize: '0.82rem', color: 'var(--text-secondary)', marginTop: '3px', display: 'flex', alignItems: 'center', gap: '5px' }}>
                               <i className="fa-regular fa-calendar" style={{ fontSize: '0.75rem' }} />
-                              {new Date(order.date).toLocaleDateString('ar-SA', { year: 'numeric', month: 'long', day: 'numeric' })}
+                              {new Date(order.date?.toDate ? order.date.toDate() : (order.date || order.createdAt)).toLocaleDateString('ar-SA', { year: 'numeric', month: 'long', day: 'numeric' })}
                             </div>
                           </div>
                           <span
@@ -558,7 +558,7 @@ export default function ProfilePage() {
                           >
                             <span style={{ color: 'var(--text-secondary)', fontWeight: '600', fontSize: '0.9rem' }}>الإجمالي</span>
                             <span style={{ fontSize: '1.15rem', fontWeight: '800', color: 'var(--accent-color)' }}>
-                              ₪{order.total?.toFixed(2)}
+                              ₪{(Number(order.total) || 0).toFixed(2)}
                             </span>
                           </div>
                         </div>

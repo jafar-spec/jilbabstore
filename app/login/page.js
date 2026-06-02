@@ -19,19 +19,13 @@ export default function LoginPage() {
 
   const handleLogin = async (e) => {
     e.preventDefault();
-    
-    // Legacy courier login
-    if (password === (process.env.NEXT_PUBLIC_COURIER_KEY || 'courier123')) {
-      sessionStorage.setItem('store_auth_role', 'courier');
-      window.location.href = '/courier';
-      return;
-    }
 
     setLoading(true);
     setError('');
     setSuccess('');
     try {
       await login(email.trim(), password);
+      // Staff land on /admin; couriers are redirected to /courier by role there.
       router.push('/admin');
     } catch (err) {
       console.error(err);

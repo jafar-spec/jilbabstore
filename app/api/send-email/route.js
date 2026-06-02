@@ -39,7 +39,7 @@ export async function POST(req) {
 
     const data = await resend.emails.send({
       from: 'Jilbab Store <onboarding@resend.dev>',
-      to: [to],
+      to: Array.isArray(to) ? to : [to],
       subject: subject,
       html: html,
     });

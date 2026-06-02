@@ -1,37 +1,32 @@
 "use client";
 import { useState, useEffect } from 'react';
+import { useRouter } from 'next/navigation';
+import { useAuth } from '@/context/AuthContext';
 import { getAllOrders, updateOrderDoc } from '@/lib/db';
 
+// Roles permitted to use the courier dashboard.
+const ALLOWED_ROLES = ['courier', 'operator', 'admin'];
+
 export default function CourierDashboard() {
+  const router = useRouter();
+  const { user, role, loading: authLoading, logout } = useAuth();
+  const authorized = !!user && ALLOWED_ROLES.includes(role);
+
   const [orders, setOrders] = useState([]);
   const [loading, setLoading] = useState(true);
   const [courierTab, setCourierTab] = useState('to_deliver');
   const [toast, setToast] = useState({ show: false, message: '', type: 'success' });
-  const [authorized, setAuthorized] = useState(false);
 
-  // Check authorization directly from sessionStorage — no AuthContext needed
+  // Gate access on the real Firebase auth role (enforced server-side by
+  // Firestore rules); redirect anyone who isn't an authorized staff member.
   useEffect(() => {
-    if (typeof window !== 'undefined') {
-      const role = sessionStorage.getItem('store_auth_role');
-      if (role === 'courier') {
-        setAuthorized(true);
-        fetchData();
-      } else {
-        window.location.replace('/login');
-      }
+    if (authLoading) return;
+    if (!authorized) {
+      router.replace('/login');
+      return;
     }
-  }, []);
-
-  // Block back button
-  useEffect(() => {
-    const handlePopState = () => {
-      if (typeof window !== 'undefined' && sessionStorage.getItem('store_auth_role') !== 'courier') {
-        window.location.replace('/login');
-      }
-    };
-    window.addEventListener('popstate', handlePopState);
-    return () => window.removeEventListener('popstate', handlePopState);
-  }, []);
+    fetchData();
+  }, [authLoading, authorized, router]);
 
   const showToast = (message, type = 'success') => {
     setToast({ show: true, message, type });
@@ -83,7 +78,7 @@ export default function CourierDashboard() {
         fetch('/api/send-email', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ to: [customerEmail], subject, htmlContent })
+          body: JSON.stringify({ to: customerEmail, subject, html: htmlContent })
         }).catch(err => console.error("Email error:", err));
       }
     } catch (err) {
@@ -92,9 +87,9 @@ export default function CourierDashboard() {
     }
   };
 
-  const handleLogout = () => {
-    sessionStorage.removeItem('store_auth_role');
-    window.location.replace('/login');
+  const handleLogout = async () => {
+    await logout();
+    router.replace('/login');
   };
 
   if (!authorized) {

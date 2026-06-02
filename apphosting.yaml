@@ -19,5 +19,3 @@ env:
     value: "1:784065108209:web:62295f84f4e7ae2ceb3150"
   - variable: NEXT_PUBLIC_FIREBASE_MEASUREMENT_ID
     value: G-2MZ6GCKN1H
-  - variable: NEXT_PUBLIC_COURIER_KEY
-    value: courier123

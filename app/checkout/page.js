@@ -57,8 +57,8 @@ export default function Checkout() {
   const [isClient, setIsClient] = useState(false);
   const [isProcessing, setIsProcessing] = useState(false);
 
-  // Payment Method: 'card' | 'cash' | 'paypal'
-  const [paymentMethod, setPaymentMethod] = useState('card');
+  // Payment Method: 'cash' | 'paypal' (card removed; PayPal billing to be wired up)
+  const [paymentMethod, setPaymentMethod] = useState('cash');
 
   // Promo Code State
   const [promoCodeInput, setPromoCodeInput] = useState('');
@@ -71,10 +71,7 @@ export default function Checkout() {
     fullName: '',
     phone: '',
     address: '',
-    city: '',
-    cardNumber: '',
-    expiry: '',
-    cvv: ''
+    city: ''
   });
 
   useEffect(() => {
@@ -260,28 +257,22 @@ export default function Checkout() {
   const handlePlaceOrder = async (e) => {
     e.preventDefault();
 
-    // Card validation only for card payment
-    if (paymentMethod === 'card') {
-      if (!formData.cardNumber || !formData.expiry || !formData.cvv) {
-        showToast(t('fillPaymentInfo'), 'error');
-        return;
-      }
-    }
-
     setIsProcessing(true);
-    
+
     try {
       const sanitizedCart = cart.map(item => {
         const sanitizedItem = { ...item };
-        delete sanitizedItem.images; 
+        delete sanitizedItem.images;
         delete sanitizedItem.image;
         delete sanitizedItem.description;
         return sanitizedItem;
       });
 
-      const orderStatus = paymentMethod === 'cash' 
-        ? 'قيد المعالجة (الدفع عند الاستلام)' 
-        : 'قيد المعالجة (مدفوع)';
+      // PayPal billing is not yet wired to a confirmation webhook, so an order is
+      // never marked "paid" here — it stays pending until payment is confirmed.
+      const orderStatus = paymentMethod === 'cash'
+        ? 'قيد المعالجة (الدفع عند الاستلام)'
+        : 'قيد المعالجة (بانتظار الدفع عبر PayPal)';
 
       const newOrder = {
         date: new Date().toISOString(),
@@ -444,12 +435,6 @@ export default function Checkout() {
                     اختر طريقة الدفع
                   </h3>
                   <div style={{ display: 'flex', gap: '10px', flexWrap: 'wrap' }}>
-                    
-                    {/* Credit Card */}
-                    <button type="button" onClick={() => setPaymentMethod('card')} style={pmStyle('card')}>
-                      <i className="fa-solid fa-credit-card" style={{ fontSize: '1.5rem', color: paymentMethod === 'card' ? 'var(--accent-color)' : 'var(--text-secondary)' }}></i>
-                      <span style={{ fontWeight: 600, fontSize: '0.85rem', color: paymentMethod === 'card' ? 'var(--accent-color)' : 'var(--text-primary)' }}>بطاقة ائتمان</span>
-                    </button>
 
                     {/* Cash on Delivery */}
                     <button type="button" onClick={() => setPaymentMethod('cash')} style={pmStyle('cash')}>
@@ -464,20 +449,6 @@ export default function Checkout() {
                     </button>
                   </div>
                 </div>
-
-                {/* Card Details (only for card payment) */}
-                {paymentMethod === 'card' && (
-                  <div style={{ background: 'var(--bg-color)', padding: '1.5rem', borderRadius: '12px', border: '1px solid var(--border-color)' }}>
-                    <p style={{ fontSize: '0.8rem', color: 'var(--text-secondary)', marginBottom: '12px', display: 'flex', alignItems: 'center', gap: '6px' }}>
-                      <i className="fa-solid fa-lock"></i> Secured by CreditGuard 3D-Secure
-                    </p>
-                    <input required type="text" name="cardNumber" placeholder={t('cardNumber')} value={formData.cardNumber} onChange={handleInputChange} style={{ ...inputStyle, background: 'var(--surface-color)' }} />
-                    <div style={{ display: 'flex', gap: '1rem', marginTop: '1rem' }}>
-                      <input required type="text" name="expiry" placeholder={t('expiry')} value={formData.expiry} onChange={handleInputChange} style={{ ...inputStyle, background: 'var(--surface-color)', flex: 1 }} />
-                      <input required type="text" name="cvv" placeholder={t('cvv')} value={formData.cvv} onChange={handleInputChange} style={{ ...inputStyle, background: 'var(--surface-color)', flex: 1 }} />
-                    </div>
-                  </div>
-                )}
 
                 {/* Cash on Delivery Info */}
                 {paymentMethod === 'cash' && (
@@ -514,12 +485,10 @@ export default function Checkout() {
                   <button type="submit" className="btn-primary" disabled={isProcessing} style={{ padding: '1rem', flex: 2, opacity: isProcessing ? 0.7 : 1 }}>
                     {isProcessing ? (
                       <><i className="fa-solid fa-spinner fa-spin"></i> {t('processing')}</>
-                    ) : paymentMethod === 'cash' ? (
-                      <><i className="fa-solid fa-check"></i> تأكيد الطلب (الدفع عند الاستلام)</>
                     ) : paymentMethod === 'paypal' ? (
                       <><i className="fa-brands fa-paypal"></i> ادفع عبر PayPal</>
                     ) : (
-                      <><i className="fa-solid fa-lock"></i> {t('payNow')}</>
+                      <><i className="fa-solid fa-check"></i> تأكيد الطلب (الدفع عند الاستلام)</>
                     )}
                   </button>
                 </div>

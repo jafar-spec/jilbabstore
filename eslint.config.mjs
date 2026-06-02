@@ -10,6 +10,10 @@ const eslintConfig = defineConfig([
     "out/**",
     "build/**",
     "next-env.d.ts",
+    // Build artifacts and vendored output that should never be linted:
+    ".firebase/**",
+    "functions/**",
+    "_static_backup/**",
   ]),
 ]);
 
