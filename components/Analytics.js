@@ -2,7 +2,7 @@
 
 import Script from 'next/script';
 import { usePathname, useSearchParams } from 'next/navigation';
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
 
 const GA_MEASUREMENT_ID = 'G-2MZ6GCKN1H';
 
@@ -10,14 +10,25 @@ export default function Analytics() {
   const pathname = usePathname();
   const searchParams = useSearchParams();
 
+  // Privacy-preserving: only load analytics after explicit cookie consent.
+  const [consented, setConsented] = useState(false);
   useEffect(() => {
-    if (pathname && window.gtag) {
+    const check = () => setConsented(localStorage.getItem('cookie_consent') === 'accepted');
+    check();
+    window.addEventListener('cookie-consent-changed', check);
+    return () => window.removeEventListener('cookie-consent-changed', check);
+  }, []);
+
+  useEffect(() => {
+    if (consented && pathname && window.gtag) {
       const url = pathname + searchParams.toString();
       window.gtag('config', GA_MEASUREMENT_ID, {
         page_path: url,
       });
     }
-  }, [pathname, searchParams]);
+  }, [pathname, searchParams, consented]);
+
+  if (!consented) return null;
 
   return (
     <>

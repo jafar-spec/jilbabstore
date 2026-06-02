@@ -88,7 +88,7 @@ export default function AdminDashboard() {
 
   // PROMO CODES STATE
   const [promoCodes, setPromoCodes] = useState([]);
-  const [newPromo, setNewPromo] = useState({ code: '', discountValue: 0, type: 'fixed' });
+  const [newPromo, setNewPromo] = useState({ code: '', discountValue: 0, type: 'fixed', usageLimit: '', perCustomerLimit: '', firstOrderOnly: false });
 
   // SUPPORT TICKETS STATE
   const [tickets, setTickets] = useState([]);
@@ -741,6 +741,39 @@ export default function AdminDashboard() {
     doc.save('orders.pdf');
   };
 
+  // Export orders as a CSV (sales/revenue report) — opens in Excel/Sheets.
+  const exportOrdersCSV = () => {
+    if (orders.length === 0) return alert('لا توجد طلبات لتصديرها');
+    const esc = (v) => {
+      const s = String(v ?? '');
+      return /[",\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
+    };
+    const headers = ['Order ID', 'Date', 'Customer', 'Phone', 'City', 'Items', 'Subtotal', 'Discount', 'Promo', 'Shipping', 'Total', 'Payment', 'Status'];
+    const rows = orders.map(o => {
+      const a = o.shipping || o.customerInfo || {};
+      const itemsCount = (o.items || []).reduce((s, it) => s + (Number(it.quantity) || 0), 0);
+      return [
+        o.id, (o.date || o.createdAt || '').slice(0, 10), a.fullName || '',
+        a.phone1 || a.phone || '', a.city || '', itemsCount,
+        Number(o.subtotal || 0).toFixed(2), Number(o.discount || 0).toFixed(2),
+        o.promoCode || '', Number(o.shipping || 0).toFixed(2), Number(o.total || 0).toFixed(2),
+        o.paymentMethod || '', o.status || ''
+      ].map(esc).join(',');
+    });
+    const revenue = orders
+      .filter(o => o.status === 'تم التوصيل')
+      .reduce((s, o) => s + (Number(o.total) || 0), 0);
+    const summary = `\nDelivered revenue,,,,,,,,,,${revenue.toFixed(2)},,`;
+    const csv = '﻿' + [headers.join(','), ...rows].join('\n') + summary; // BOM for Arabic in Excel
+    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = `orders_${new Date().toISOString().slice(0, 10)}.csv`;
+    link.click();
+    URL.revokeObjectURL(url);
+  };
+
   // --- Newsletter Functions ---
 
   const handleSelectAllSubscribers = (e) => {
@@ -1101,6 +1134,9 @@ export default function AdminDashboard() {
               </button>
               <button onClick={exportToPDF} className="btn-primary" style={{ padding: '0.8rem 1.5rem', background: orders.length === 0 ? 'var(--text-secondary)' : '#F40F02', color: 'white', opacity: orders.length === 0 ? 0.5 : 1, cursor: orders.length === 0 ? 'not-allowed' : 'pointer' }}>
                 <i className="fa-solid fa-file-pdf"></i> <span className="hide-mobile">PDF</span>
+              </button>
+              <button onClick={exportOrdersCSV} className="btn-primary" style={{ padding: '0.8rem 1.5rem', background: orders.length === 0 ? 'var(--text-secondary)' : '#6c5ce7', color: 'white', opacity: orders.length === 0 ? 0.5 : 1, cursor: orders.length === 0 ? 'not-allowed' : 'pointer' }} title="تقرير المبيعات والإيرادات">
+                <i className="fa-solid fa-chart-line"></i> <span className="hide-mobile">تقرير المبيعات</span>
               </button>
             </div>
           )}
@@ -1840,6 +1876,7 @@ export default function AdminDashboard() {
                                 <option value="جاري التوصيل">جاري التوصيل</option>
                                 <option value="تم التوصيل">تم التوصيل</option>
                                 <option value="ملغي">ملغي</option>
+                                <option value="مرتجع">مرتجع / استرداد</option>
                               </select>
                             </td>
                             <td style={{ padding: '1rem' }}>
@@ -1957,6 +1994,10 @@ export default function AdminDashboard() {
                       <div>
                         <label className="admin-label">تكلفة الشحن (Shipping Cost ₪)</label>
                         <input type="number" min="0" value={cmsSettings.shippingCost || 30} onChange={e => setCmsSettings({...cmsSettings, shippingCost: Number(e.target.value)})} className="admin-input" />
+                      </div>
+                      <div>
+                        <label className="admin-label">بريد تنبيهات المخزون (Low-stock alert email)</label>
+                        <input type="email" dir="ltr" placeholder="owner@example.com" value={cmsSettings.alertEmail || ''} onChange={e => setCmsSettings({...cmsSettings, alertEmail: e.target.value.trim()})} className="admin-input" />
                       </div>
                     </div>
                   </div>
@@ -2145,12 +2186,27 @@ export default function AdminDashboard() {
                       <option value="percent">نسبة مئوية (%)</option>
                     </select>
                     <input type="number" placeholder="القيمة" value={newPromo.discountValue || ''} onChange={(e) => setNewPromo({...newPromo, discountValue: Number(e.target.value)})} style={{ padding: '0.8rem', borderRadius: '8px', border: '1px solid var(--border-color)', width: '120px' }} />
+                    <input type="number" placeholder="حد الاستخدام الكلي" title="إجمالي مرات الاستخدام (فارغ = بلا حد)" value={newPromo.usageLimit} onChange={(e) => setNewPromo({...newPromo, usageLimit: e.target.value})} style={{ padding: '0.8rem', borderRadius: '8px', border: '1px solid var(--border-color)', width: '150px' }} />
+                    <input type="number" placeholder="حد لكل عميل" title="أقصى استخدام لكل عميل (فارغ = بلا حد)" value={newPromo.perCustomerLimit} onChange={(e) => setNewPromo({...newPromo, perCustomerLimit: e.target.value})} style={{ padding: '0.8rem', borderRadius: '8px', border: '1px solid var(--border-color)', width: '130px' }} />
+                    <label style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '0.85rem', color: 'var(--text-secondary)' }}>
+                      <input type="checkbox" checked={newPromo.firstOrderOnly} onChange={(e) => setNewPromo({...newPromo, firstOrderOnly: e.target.checked})} /> لأول طلب فقط
+                    </label>
                     <button onClick={async () => {
                       if (!newPromo.code || newPromo.discountValue <= 0) return showToast('الرجاء إدخال بيانات صحيحة', 'error');
                       try {
-                        const id = await addPromoCode(newPromo);
-                        setPromoCodes([...promoCodes, { ...newPromo, id }]);
-                        setNewPromo({ code: '', discountValue: 0, type: 'fixed' });
+                        const payload = {
+                          code: newPromo.code,
+                          type: newPromo.type,
+                          discountValue: newPromo.discountValue,
+                          usageLimit: newPromo.usageLimit ? Number(newPromo.usageLimit) : null,
+                          perCustomerLimit: newPromo.perCustomerLimit ? Number(newPromo.perCustomerLimit) : null,
+                          firstOrderOnly: !!newPromo.firstOrderOnly,
+                          usageCount: 0,
+                          active: true
+                        };
+                        const id = await addPromoCode(payload);
+                        setPromoCodes([...promoCodes, { ...payload, id }]);
+                        setNewPromo({ code: '', discountValue: 0, type: 'fixed', usageLimit: '', perCustomerLimit: '', firstOrderOnly: false });
                         showToast('تم إضافة الكود بنجاح', 'success');
                       } catch(e) {
                         showToast('خطأ في الإضافة', 'error');
@@ -2166,6 +2222,7 @@ export default function AdminDashboard() {
                         <th>الكود</th>
                         <th>النوع</th>
                         <th>القيمة</th>
+                        <th>الاستخدام / القيود</th>
                         <th>إجراء</th>
                       </tr>
                     </thead>
@@ -2175,6 +2232,11 @@ export default function AdminDashboard() {
                           <td style={{ fontWeight: 'bold' }}>{promo.code}</td>
                           <td>{promo.type === 'fixed' ? 'مبلغ ثابت' : 'نسبة مئوية'}</td>
                           <td>{promo.discountValue}{promo.type === 'percent' ? '%' : ' شيكل'}</td>
+                          <td style={{ fontSize: '0.8rem', color: 'var(--text-secondary)' }}>
+                            {(promo.usageCount || 0)}{promo.usageLimit ? ` / ${promo.usageLimit}` : ''} استخدام
+                            {promo.firstOrderOnly ? ' • أول طلب' : ''}
+                            {promo.perCustomerLimit ? ` • ${promo.perCustomerLimit}/عميل` : ''}
+                          </td>
                           <td>
                             <button onClick={async () => {
                               if(confirm('هل أنت متأكد من الحذف؟')) {
@@ -2810,6 +2872,7 @@ export default function AdminDashboard() {
                             <option value="جاري التوصيل">جاري التوصيل</option>
                             <option value="تم التوصيل">تم التوصيل</option>
                             <option value="ملغي">ملغي</option>
+                            <option value="مرتجع">مرتجع / استرداد</option>
                           </select>
                         </div>
                       </div>

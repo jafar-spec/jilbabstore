@@ -7,6 +7,7 @@ import Link from 'next/link';
 import Image from 'next/image';
 import { getProductById, getReviews, addReview } from '@/lib/db';
 import { useWishlist } from '@/context/WishlistContext';
+import { recordRecentlyViewed } from '@/components/RecentlyViewed';
 
 export default function ClientProductDetail({ initialProduct, initialReviews, relatedProducts }) {
   const { addToCart } = useCart();
@@ -38,6 +39,7 @@ export default function ClientProductDetail({ initialProduct, initialReviews, re
           const inStock = initialProduct.variants.filter(v => v.stock > 0);
           if(inStock.length > 0) setSelectedSize(inStock[0].size);
       }
+      recordRecentlyViewed(initialProduct.id);
     }
   }, [initialProduct]);
 

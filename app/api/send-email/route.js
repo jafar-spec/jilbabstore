@@ -1,11 +1,15 @@
 import { Resend } from 'resend';
 import { adminAuth, adminDb } from '@/lib/firebaseAdmin';
+import { rateLimit, clientIp } from '@/lib/rateLimit';
 
 // Provide a dummy key during build time if environment variables aren't loaded yet
 const resend = new Resend(process.env.RESEND_API_KEY || 're_dummy_key_for_build_purposes');
 
 export async function POST(req) {
   try {
+    const rl = rateLimit(`email:${clientIp(req)}`, { limit: 20, windowMs: 60_000 });
+    if (!rl.ok) return new Response(JSON.stringify({ error: 'Too many requests' }), { status: 429 });
+
     // 1. Verify Authorization Header
     const authHeader = req.headers.get('Authorization');
     if (!authHeader || !authHeader.startsWith('Bearer ')) {

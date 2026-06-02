@@ -64,6 +64,11 @@ service cloud.firestore {
       allow delete: if isAdmin();
     }
 
+    // Wishlists — a customer's own saved items
+    match /wishlists/{userId} {
+      allow read, write: if isOwner(userId);
+    }
+
     // Orders — Strict access control
     match /orders/{orderId} {
       // Orders are created server-side (Admin SDK / POST /api/orders) so totals

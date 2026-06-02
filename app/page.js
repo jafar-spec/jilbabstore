@@ -7,23 +7,27 @@ import Footer from '@/components/Footer';
 import AdsBanner from '@/components/AdsBanner';
 import { useEffect, useState } from 'react';
 import { useLanguage } from '@/context/LanguageContext';
-import { getProducts, getSections } from '@/lib/db';
+import { getProducts, getSections, getReviewStats } from '@/lib/db';
+import RecentlyViewed from '@/components/RecentlyViewed';
 
 export default function Home() {
   const [products, setProducts] = useState([]);
   const [sections, setSections] = useState([]);
+  const [ratings, setRatings] = useState({});
   const [loading, setLoading] = useState(true);
   const { t, lang } = useLanguage();
 
   useEffect(() => {
     const fetchData = async () => {
       try {
-        const [dbProducts, dbSections] = await Promise.all([
+        const [dbProducts, dbSections, stats] = await Promise.all([
           getProducts(),
-          getSections()
+          getSections(),
+          getReviewStats()
         ]);
         setProducts(dbProducts);
         setSections(dbSections);
+        setRatings(stats || {});
       } catch (error) {
         console.error("Error loading home data", error);
         setProducts([]);
@@ -62,11 +66,12 @@ export default function Home() {
                 return (
                   <div key={section.id} id={index === 0 ? 'shop' : undefined}>
                     <div id={`section-${section.id}`}>
-                      <ProductGrid 
-                        title={sectionTitle} 
-                        products={sectionProducts} 
+                      <ProductGrid
+                        title={sectionTitle}
+                        products={sectionProducts}
                         subsections={section.subsections || []}
-                        emptyMessage={t('emptySection')} 
+                        ratings={ratings}
+                        emptyMessage={t('emptySection')}
                       />
                     </div>
                     {/* Add divider except for the last section */}
@@ -80,8 +85,8 @@ export default function Home() {
           </>
       )}
 
-      
-      
+      <RecentlyViewed ratings={ratings} />
+
     </main>
   );
 }

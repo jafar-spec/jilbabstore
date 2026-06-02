@@ -5,7 +5,7 @@ import { useToast } from '@/context/ToastContext';
 import { useLanguage } from '@/context/LanguageContext';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
-import { collection, query, where, getDocs, limit, doc, setDoc, serverTimestamp } from 'firebase/firestore';
+import { collection, query, where, getDocs, getDoc, limit, doc, setDoc, serverTimestamp } from 'firebase/firestore';
 import { onAuthStateChanged } from 'firebase/auth';
 import { db, auth } from '@/lib/firebase';
 import Image from 'next/image';
@@ -79,21 +79,54 @@ export default function Checkout() {
     city: ''
   });
 
+  useEffect(() => { setIsClient(true); }, []);
+
+  // Prefill the saved address for logged-in customers.
   useEffect(() => {
-    setIsClient(true);
-    if (user) {
-      setFormData(prev => ({ ...prev, email: user.email }));
-    }
+    if (!user) return;
+    setFormData(prev => ({ ...prev, email: user.email }));
+    (async () => {
+      try {
+        const snap = await getDoc(doc(db, 'customers', user.uid));
+        if (snap.exists()) {
+          const c = snap.data();
+          setFormData(prev => ({
+            ...prev,
+            fullName: prev.fullName || c.fullName || '',
+            phone: prev.phone || c.phone1 || c.phone || '',
+            city: prev.city || c.city || '',
+            address: prev.address || c.street || c.address || '',
+            email: user.email || c.email || '',
+          }));
+        }
+      } catch (err) {
+        console.error('Could not load saved address', err);
+      }
+    })();
   }, [user]);
 
   const handleInputChange = (e) => {
     setFormData({ ...formData, [e.target.name]: e.target.value });
   };
 
+  // Accept 9–15 digits (optionally a leading +), covering local & intl formats.
+  const isValidPhone = (v) => {
+    const digits = String(v || '').replace(/[^\d]/g, '');
+    return digits.length >= 9 && digits.length <= 15;
+  };
+
   const handleNextStep = (e) => {
     e.preventDefault();
     if (!formData.fullName || !formData.phone || !formData.address || !formData.city) {
       showToast(t('fillShippingInfo'), 'error');
+      return;
+    }
+    if (!user && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(formData.email || '')) {
+      showToast('يرجى إدخال بريد إلكتروني صحيح', 'error');
+      return;
+    }
+    if (!isValidPhone(formData.phone)) {
+      showToast('يرجى إدخال رقم هاتف صحيح', 'error');
       return;
     }
     setStep(2);

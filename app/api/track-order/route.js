@@ -1,8 +1,12 @@
 import { NextResponse } from 'next/server';
 import { adminDb } from '@/lib/firebaseAdmin';
+import { rateLimit, clientIp } from '@/lib/rateLimit';
 
 export async function POST(request) {
   try {
+    const rl = rateLimit(`track:${clientIp(request)}`, { limit: 30, windowMs: 60_000 });
+    if (!rl.ok) return NextResponse.json({ error: 'Too many requests' }, { status: 429 });
+
     const { orderId } = await request.json();
 
     if (!orderId || typeof orderId !== 'string' || orderId.length < 5 || orderId.length > 40) {

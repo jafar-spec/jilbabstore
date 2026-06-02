@@ -7,7 +7,7 @@ import { useWishlist } from '@/context/WishlistContext';
 import Link from 'next/link';
 import Image from 'next/image';
 
-export default function ProductGrid({ title, products, subsections = [], emptyMessage }) {
+export default function ProductGrid({ title, products, subsections = [], emptyMessage, ratings = {} }) {
   const { addToCart } = useCart();
   const { t, lang } = useLanguage();
   const { toggleWishlist, isInWishlist } = useWishlist();
@@ -197,6 +197,14 @@ export default function ProductGrid({ title, products, subsections = [], emptyMe
                   </div>
                   <div className="product-info">
                       <Link href={`/product/${product.id}`}><h3 className="product-title">{product.title}</h3></Link>
+                      {ratings[product.id]?.count > 0 && (
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '4px', margin: '2px 0 4px', fontSize: '0.8rem' }}>
+                          {[...Array(5)].map((_, i) => (
+                            <i key={i} className="fa-solid fa-star" style={{ color: i < Math.round(ratings[product.id].avg) ? '#f1c40f' : '#e0e0e0', fontSize: '0.75rem' }}></i>
+                          ))}
+                          <span style={{ color: 'var(--text-secondary)' }}>({ratings[product.id].count})</span>
+                        </div>
+                      )}
                       <p className="product-price">{product.price} {t('price')}</p>
                       
                       {hasVariants ? (

@@ -51,7 +51,9 @@ export async function POST(req) {
       const state = order.stockState || 'reserved';
 
       const fulfilling = status === 'تم التوصيل' && state === 'reserved';
-      const cancelling = status === 'ملغي' && state !== 'released' && state !== 'returned';
+      // Cancel (before delivery) and Return/Refund (after delivery) both put
+      // stock back; idempotent via stockState.
+      const cancelling = (status === 'ملغي' || status === 'مرتجع') && state !== 'released' && state !== 'returned';
 
       let productWrites = [];
       if (fulfilling || cancelling) {

@@ -6,17 +6,30 @@ import { AuthProvider } from '@/context/AuthContext'
 import { WishlistProvider } from '@/context/WishlistContext'
 import ClientWrapper from '@/components/ClientWrapper'
 import Analytics from '@/components/Analytics'
+import CookieConsent from '@/components/CookieConsent'
 import { Suspense } from 'react'
 
 export const metadata = {
-  metadataBase: new URL('https://jilbabstore.com'),
-  title: 'متجر جلباب | Jilbab Store',
-  description: 'אופנה צנועה יוקרתית | Premium Modest Fashion',
+  metadataBase: new URL('https://jilbab.store'),
+  title: {
+    default: 'متجر جلباب | Jilbab Store',
+    template: '%s | Jilbab Store',
+  },
+  description: 'أزياء محتشمة عصرية — جلابيب وخمارات بلمسة أنيقة. Premium modest fashion.',
+  keywords: ['جلباب', 'خمار', 'عباية', 'أزياء محتشمة', 'jilbab', 'khimar', 'modest fashion', 'abaya'],
   icons: {
     icon: '/assets/logo.png',
     shortcut: '/assets/logo.png',
     apple: '/assets/logo.png',
   },
+  openGraph: {
+    type: 'website',
+    siteName: 'Jilbab Store',
+    title: 'متجر جلباب | Jilbab Store',
+    description: 'أزياء محتشمة عصرية — جلابيب وخمارات بلمسة أنيقة.',
+    images: ['/assets/logo.png'],
+  },
+  twitter: { card: 'summary_large_image' },
 }
 
 export default function RootLayout({ children }) {
@@ -38,6 +51,7 @@ export default function RootLayout({ children }) {
                   <ClientWrapper>
                     {children}
                   </ClientWrapper>
+                  <CookieConsent />
                 </WishlistProvider>
               </CartProvider>
             </ToastProvider>
