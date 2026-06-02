@@ -7,6 +7,7 @@ import { WishlistProvider } from '@/context/WishlistContext'
 import ClientWrapper from '@/components/ClientWrapper'
 import Analytics from '@/components/Analytics'
 import CookieConsent from '@/components/CookieConsent'
+import AppCheckInit from '@/components/AppCheckInit'
 import { Suspense } from 'react'
 
 export const metadata = {
@@ -43,6 +44,7 @@ export default function RootLayout({ children }) {
         <Suspense fallback={null}>
           <Analytics />
         </Suspense>
+        <AppCheckInit />
         <LanguageProvider>
           <AuthProvider>
             <ToastProvider>

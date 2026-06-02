@@ -214,6 +214,40 @@ export default function AdminDashboard() {
     window.location.replace('/login');
   };
 
+  // --- ALGOLIA SEARCH INDEX SYNC ---
+  const syncSearchIndex = async (product) => {
+    try {
+      const token = await user.getIdToken();
+      await fetch('/api/admin/search-index', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+        body: JSON.stringify({ product })
+      });
+    } catch (e) { console.warn('search index sync failed', e); }
+  };
+  const removeFromSearchIndex = async (id) => {
+    try {
+      const token = await user.getIdToken();
+      await fetch('/api/admin/search-index', {
+        method: 'DELETE',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+        body: JSON.stringify({ id })
+      });
+    } catch (e) { console.warn('search index delete failed', e); }
+  };
+  const reindexAll = async () => {
+    try {
+      const token = await user.getIdToken();
+      const res = await fetch('/api/admin/search-index', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+        body: JSON.stringify({ all: true })
+      });
+      const d = await res.json();
+      showToast(res.ok ? `تمت فهرسة ${d.indexed} منتج للبحث` : (d.error || 'فشل الفهرسة'), res.ok ? 'success' : 'error');
+    } catch (e) { showToast('فشل الفهرسة', 'error'); }
+  };
+
   // --- COURIER / STAFF MANAGEMENT ---
   const fetchCouriers = async () => {
     try {
@@ -542,13 +576,15 @@ export default function AdminDashboard() {
       };
       productDoc.searchText = buildSearchText(productDoc, variantsWithSku);
 
+      let savedId = editingProductId;
       if (editingProductId) {
         await updateProduct(editingProductId, productDoc);
         showToast('تم تحديث المنتج بنجاح!', 'success');
       } else {
-        await createProduct({ ...productDoc, createdAt: new Date().toISOString() });
+        savedId = await createProduct({ ...productDoc, createdAt: new Date().toISOString() });
         showToast('تمت إضافة المنتج بنجاح!', 'success');
       }
+      syncSearchIndex({ id: savedId, ...productDoc });
 
       resetProductForm();
       await fetchData();
@@ -592,6 +628,7 @@ export default function AdminDashboard() {
     if (window.confirm("هل أنت متأكد من حذف هذا المنتج نهائياً؟")) {
       try {
         await deleteProductDoc(baseId);
+        removeFromSearchIndex(baseId);
         setProducts(products.filter(prod => prod.id !== baseId));
         showToast('تم حذف المنتج بنجاح', 'success');
       } catch (err) {
@@ -1621,6 +1658,9 @@ export default function AdminDashboard() {
 
                 <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '1.5rem', gap: '1rem', flexWrap: 'wrap', alignItems: 'center' }}>
                   <input type="text" placeholder="🔍 ابحث برمز SKU أو اسم المنتج..." value={inventorySearch} onChange={(e) => setInventorySearch(e.target.value)} style={{ flex: '1', minWidth: '250px', padding: '0.8rem 1.2rem', border: '1px solid var(--glass-border)', borderRadius: '8px', background: 'var(--bg-color)', color: 'var(--text-primary)' }} />
+                  <button onClick={reindexAll} style={{ padding: '0.7rem 1.2rem', borderRadius: '8px', border: '1px solid var(--accent-color)', background: 'transparent', color: 'var(--accent-color)', cursor: 'pointer', fontWeight: 600 }} title="إعادة بناء فهرس البحث (Algolia)">
+                    <i className="fa-solid fa-magnifying-glass"></i> إعادة فهرسة البحث
+                  </button>
                   <span style={{ color: 'var(--text-secondary)', display: 'flex', alignItems: 'center', gap: '0.5rem' }}><i className="fa-solid fa-boxes-stacked"></i> إجمالي الأصناف: {allInventoryItems.length}</span>
                 </div>
 

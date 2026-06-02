@@ -5,6 +5,7 @@ import Image from 'next/image';
 import { useLanguage } from '@/context/LanguageContext';
 import { useRouter } from 'next/navigation';
 import { getProducts, matchesProduct } from '@/lib/db';
+import { searchProductHits } from '@/lib/algolia';
 
 export default function SearchOverlay({ isOpen, onClose }) {
   const { t, lang } = useLanguage();
@@ -34,10 +35,14 @@ export default function SearchOverlay({ isOpen, onClose }) {
       setResults([]);
       return;
     }
-    // Debounce so we filter ~250ms after the user stops typing.
-    const handle = setTimeout(() => {
-      const filtered = products.filter(p => matchesProduct(p, q)).slice(0, 24);
-      setResults(filtered);
+    // Debounce ~250ms; try Algolia first, fall back to local filtering.
+    const handle = setTimeout(async () => {
+      const hits = await searchProductHits(q);
+      if (hits) {
+        setResults(hits.map(h => ({ id: h.objectID, title: h.title, price: h.price, image: h.image })));
+      } else {
+        setResults(products.filter(p => matchesProduct(p, q)).slice(0, 24));
+      }
     }, 250);
     return () => clearTimeout(handle);
   }, [query, products]);

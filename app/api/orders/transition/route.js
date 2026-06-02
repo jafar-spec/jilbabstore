@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import { adminAuth, adminDb } from '@/lib/firebaseAdmin';
+import { sendSms } from '@/lib/sms';
 
 // Staff-only order status transitions with atomic stock lifecycle.
 //   reserved  → (delivered)  fulfill : stock -= qty, reserved -= qty
@@ -41,12 +42,14 @@ export async function POST(req) {
 
   const orderRef = adminDb.collection('orders').doc(orderId);
   const movements = [];
+  let customerPhone = null;
 
   try {
     await adminDb.runTransaction(async (tx) => {
       const orderSnap = await tx.get(orderRef);
       if (!orderSnap.exists) throw new Error('Order not found');
       const order = orderSnap.data();
+      customerPhone = order.customerInfo?.phone || order.customerInfo?.phone1 || order.shipping?.phone1 || null;
       const items = (order.items || []).filter(it => it.id);
       const state = order.stockState || 'reserved';
 
@@ -98,6 +101,16 @@ export async function POST(req) {
     // Audit log (best-effort, outside the transaction).
     for (const m of movements) {
       adminDb.collection('stock_movements').add(m).catch(() => {});
+    }
+
+    // SMS the customer on delivery milestones (best-effort; no-op if Twilio
+    // isn't fully configured).
+    if (customerPhone) {
+      const num = orderId.slice(0, 8).toUpperCase();
+      let body = null;
+      if (status === 'جاري التوصيل') body = `طلبك #${num} في الطريق إليك الآن! متجر جلباب`;
+      else if (status === 'تم التوصيل') body = `تم توصيل طلبك #${num} بنجاح. شكراً لتسوقك من متجر جلباب!`;
+      if (body) sendSms(customerPhone, body).catch(() => {});
     }
 
     return NextResponse.json({ success: true });

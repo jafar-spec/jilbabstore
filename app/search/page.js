@@ -27,14 +27,23 @@ function SearchContent() {
 
   useEffect(() => {
     if (loading) return;
-    if (query) {
-      import('@/lib/db').then(({ matchesProduct }) => {
-        const q = query.toLowerCase().trim();
+    if (!query) { setFiltered(products); return; }
+    let cancelled = false;
+    (async () => {
+      const q = query.toLowerCase().trim();
+      // Algolia ranks; map ordered ids back to full products (keeps variants).
+      const { searchProductIds } = await import('@/lib/algolia');
+      const ids = await searchProductIds(q);
+      if (cancelled) return;
+      if (ids) {
+        const byId = new Map(products.map(p => [p.id, p]));
+        setFiltered(ids.map(id => byId.get(id)).filter(Boolean));
+      } else {
+        const { matchesProduct } = await import('@/lib/db');
         setFiltered(products.filter(p => matchesProduct(p, q)));
-      });
-    } else {
-      setFiltered(products);
-    }
+      }
+    })();
+    return () => { cancelled = true; };
   }, [query, products, loading]);
 
   return (
