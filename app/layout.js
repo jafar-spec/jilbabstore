@@ -7,6 +7,7 @@ import { WishlistProvider } from '@/context/WishlistContext'
 import ClientWrapper from '@/components/ClientWrapper'
 import Analytics from '@/components/Analytics'
 import CookieConsent from '@/components/CookieConsent'
+import AccessibilityWidget from '@/components/AccessibilityWidget'
 import { Suspense } from 'react'
 
 export const metadata = {
@@ -55,6 +56,7 @@ export default function RootLayout({ children }) {
                     </div>
                   </ClientWrapper>
                   <CookieConsent />
+                  <AccessibilityWidget />
                 </WishlistProvider>
               </CartProvider>
             </ToastProvider>

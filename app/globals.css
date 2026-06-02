@@ -1209,3 +1209,40 @@ button {
     scroll-behavior: auto !important;
   }
 }
+
+/* ==========================================================================
+   Accessibility widget modes (toggled on <html> by AccessibilityWidget)
+   ========================================================================== */
+
+/* High contrast: darken secondary text + borders, underline links. */
+html.a11y-contrast {
+  --text-secondary: #1a1a1a;
+  --border-color: #000000;
+  --glass-border: #000000;
+}
+html.a11y-contrast a { text-decoration: underline; }
+html.a11y-contrast .product-title,
+html.a11y-contrast p { color: #000 !important; }
+
+/* Readable font + generous spacing. */
+html.a11y-readable,
+html.a11y-readable body,
+html.a11y-readable * {
+  font-family: Arial, 'Segoe UI', Tahoma, sans-serif !important;
+  letter-spacing: 0.01em !important;
+}
+html.a11y-readable p,
+html.a11y-readable li { line-height: 1.9 !important; }
+
+/* Underline all links. */
+html.a11y-links a { text-decoration: underline !important; }
+
+/* Force-reduce motion (user choice, independent of OS setting). */
+html.a11y-reduce-motion *,
+html.a11y-reduce-motion *::before,
+html.a11y-reduce-motion *::after {
+  animation-duration: 0.001ms !important;
+  animation-iteration-count: 1 !important;
+  transition-duration: 0.001ms !important;
+  scroll-behavior: auto !important;
+}
