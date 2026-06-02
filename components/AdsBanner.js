@@ -8,6 +8,21 @@ import { useLanguage } from '@/context/LanguageContext';
 const pick = (obj, field, lang) =>
   obj?.[`${field}_${lang}`] || obj?.[`${field}_ar`] || obj?.[field] || '';
 
+// Only treat a CTA link as navigable if it's a real internal path or an
+// http(s) URL. Anything else (e.g. placeholder text) is ignored so it can't
+// 404 on prefetch/click.
+const isExternal = (h) => /^https?:\/\//i.test(h);
+const safeHref = (h) => (typeof h === 'string' && (h.startsWith('/') || isExternal(h)) ? h.trim() : null);
+
+const ctaStyle = {
+  display: 'inline-block', background: '#fff', color: '#000',
+  padding: '0.75rem 2rem', fontSize: '0.85rem', fontWeight: 700,
+  textTransform: 'uppercase', letterSpacing: '0.1em', textDecoration: 'none',
+  transition: 'all 0.3s', border: '2px solid #fff'
+};
+const ctaOver = (e) => { e.currentTarget.style.background = 'transparent'; e.currentTarget.style.color = '#fff'; };
+const ctaOut = (e) => { e.currentTarget.style.background = '#fff'; e.currentTarget.style.color = '#000'; };
+
 export default function AdsBanner() {
   const { storeSettings, lang } = useLanguage();
   const [current, setCurrent] = useState(0);
@@ -65,21 +80,20 @@ export default function AdsBanner() {
                     {pick(a,'subtitle',lang)}
                   </p>
                 )}
-                {(a.linkUrl || pick(a,'linkUrl',lang)) && pick(a,'linkText',lang) && (
-                  <Link
-                    href={a.linkUrl || pick(a,'linkUrl',lang)}
-                    style={{
-                      display: 'inline-block', background: '#fff', color: '#000',
-                      padding: '0.75rem 2rem', fontSize: '0.85rem', fontWeight: 700,
-                      textTransform: 'uppercase', letterSpacing: '0.1em', textDecoration: 'none',
-                      transition: 'all 0.3s', border: '2px solid #fff'
-                    }}
-                    onMouseEnter={e => { e.currentTarget.style.background = 'transparent'; e.currentTarget.style.color = '#fff'; }}
-                    onMouseLeave={e => { e.currentTarget.style.background = '#fff'; e.currentTarget.style.color = '#000'; }}
-                  >
-                    {pick(a,'linkText',lang)}
-                  </Link>
-                )}
+                {(() => {
+                  const href = safeHref(a.linkUrl || pick(a, 'linkUrl', lang));
+                  const text = pick(a, 'linkText', lang);
+                  if (!href || !text) return null;
+                  return isExternal(href) ? (
+                    <a href={href} target="_blank" rel="noopener noreferrer" style={ctaStyle} onMouseEnter={ctaOver} onMouseLeave={ctaOut}>
+                      {text}
+                    </a>
+                  ) : (
+                    <Link href={href} prefetch={false} style={ctaStyle} onMouseEnter={ctaOver} onMouseLeave={ctaOut}>
+                      {text}
+                    </Link>
+                  );
+                })()}
               </div>
             )}
           </div>
