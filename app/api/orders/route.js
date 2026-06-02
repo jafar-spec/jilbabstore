@@ -24,7 +24,7 @@ export async function POST(req) {
     }
 
     const body = await req.json();
-    const { items, customerInfo = {}, promoCode, paymentMethod } = body;
+    const { items, customerInfo = {}, promoCode, paymentMethod, cardPayment } = body;
 
     if (!Array.isArray(items) || items.length === 0) {
       return NextResponse.json({ error: 'Cart is empty' }, { status: 400 });
@@ -32,8 +32,12 @@ export async function POST(req) {
     if (items.length > 50) {
       return NextResponse.json({ error: 'Too many items' }, { status: 400 });
     }
-    if (!['cash', 'paypal'].includes(paymentMethod)) {
+    if (!['cash', 'paypal', 'card'].includes(paymentMethod)) {
       return NextResponse.json({ error: 'Invalid payment method' }, { status: 400 });
+    }
+    // A card order may only be created with a verified charge result.
+    if (paymentMethod === 'card' && !cardPayment?.chargeId) {
+      return NextResponse.json({ error: 'Card payment not completed' }, { status: 400 });
     }
 
     // Resolve the customer uid from a verified token (never trust a client uid).
@@ -160,9 +164,16 @@ export async function POST(req) {
     const shipping = discountedSubtotal >= freeShippingThreshold ? 0 : shippingCost;
     const total = round2(discountedSubtotal + shipping);
 
+    // Fulfilment status + payment status.
+    //   cash  → COD (collected on delivery)
+    //   card  → paid (charge already succeeded before order creation)
+    //   paypal→ pending (awaiting PayPal confirmation)
     const orderStatus = paymentMethod === 'cash'
       ? 'قيد المعالجة (الدفع عند الاستلام)'
-      : 'قيد المعالجة (بانتظار الدفع عبر PayPal)';
+      : paymentMethod === 'card'
+        ? 'قيد المعالجة (مدفوع — بطاقة)'
+        : 'قيد المعالجة (بانتظار الدفع عبر PayPal)';
+    const paymentStatus = paymentMethod === 'card' ? 'paid' : (paymentMethod === 'cash' ? 'cod' : 'pending');
 
     const orderDoc = {
       date: new Date().toISOString(),
@@ -170,7 +181,10 @@ export async function POST(req) {
       customerInfo: { ...safeCustomerInfo },
       items: orderItems,
       subtotal, discount, promoCode: appliedPromo, shipping, total,
-      paymentMethod, status: orderStatus, stockState: 'reserved',
+      paymentMethod, status: orderStatus, paymentStatus, stockState: 'reserved',
+      payment: paymentMethod === 'card' && cardPayment
+        ? { chargeId: cardPayment.chargeId, brand: cardPayment.brand || '', last4: cardPayment.last4 || '' }
+        : null,
       createdAt: new Date().toISOString()
     };
 

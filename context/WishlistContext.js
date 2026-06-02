@@ -11,7 +11,7 @@ const WishlistContext = createContext();
 export const WishlistProvider = ({ children }) => {
   const [wishlist, setWishlist] = useState([]);
   const { showToast } = useToast();
-  const hydrated = useRef(false);
+  const [isHydrated, setIsHydrated] = useState(false);
   const uidRef = useRef(null);
 
   // Load from localStorage on mount
@@ -24,7 +24,7 @@ export const WishlistProvider = ({ children }) => {
     } catch (e) {
       console.error("Could not load wishlist", e);
     }
-    hydrated.current = true;
+    setIsHydrated(true);
   }, []);
 
   // When a customer signs in, merge their Firestore wishlist with the local one
@@ -50,7 +50,7 @@ export const WishlistProvider = ({ children }) => {
 
   // Persist to localStorage always; mirror to Firestore for logged-in customers.
   useEffect(() => {
-    if (!hydrated.current) return;
+    if (!isHydrated) return;
     try {
       localStorage.setItem('jilbab_wishlist', JSON.stringify(wishlist));
     } catch (e) {
@@ -60,7 +60,7 @@ export const WishlistProvider = ({ children }) => {
       setDoc(doc(db, 'wishlists', uidRef.current), { items: wishlist, updatedAt: new Date().toISOString() }, { merge: true })
         .catch(e => console.error('Could not sync wishlist', e));
     }
-  }, [wishlist]);
+  }, [wishlist, isHydrated]);
 
   const addToWishlist = (product) => {
     if (wishlist.some(item => item.id === product.id)) return;

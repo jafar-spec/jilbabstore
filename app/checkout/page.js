@@ -13,6 +13,11 @@ import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
 import { amiriBase64 } from '@/lib/fonts/amiriBase64';
 import JsBarcode from 'jsbarcode';
+import CardForm from '@/components/CardForm';
+
+// Card payments are shown unless explicitly disabled. The UI + flow are ready;
+// going live only requires wiring the gateway in /api/payments/charge.
+const CARD_ENABLED = process.env.NEXT_PUBLIC_CARD_PAYMENTS_ENABLED !== 'false';
 
 const fetchImageAsBase64 = async (url) => {
   if (!url) return null;
@@ -62,8 +67,10 @@ export default function Checkout() {
   const [isClient, setIsClient] = useState(false);
   const [isProcessing, setIsProcessing] = useState(false);
 
-  // Payment Method: 'cash' | 'paypal' (card removed; PayPal billing to be wired up)
+  // Payment Method: 'card' | 'cash' | 'paypal'
   const [paymentMethod, setPaymentMethod] = useState('cash');
+  // Non-sensitive card metadata only ({ valid, brand, last4 }) — never the PAN.
+  const [cardState, setCardState] = useState({ valid: false });
 
   // Promo Code State
   const [promoCodeInput, setPromoCodeInput] = useState('');
@@ -325,6 +332,38 @@ export default function Checkout() {
 
   const handlePlaceOrder = async (e) => {
     e.preventDefault();
+
+    // --- Card payment pre-flight ---------------------------------------
+    // The order is only created after the charge succeeds. Going live: replace
+    // the gateway call in /api/payments/charge and tokenize the card in CardForm.
+    let cardPayment = null;
+    if (paymentMethod === 'card') {
+      if (!cardState.valid) {
+        showToast('يرجى إدخال بيانات بطاقة صحيحة', 'error');
+        return;
+      }
+      setIsProcessing(true);
+      try {
+        const res = await fetch('/api/payments/charge', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          // NOTE: no PAN here — a real gateway token would be sent instead.
+          body: JSON.stringify({ amount: Number(finalTotal) || 0, currency: 'ILS', brand: cardState.brand, last4: cardState.last4 })
+        });
+        const data = await res.json();
+        if (!res.ok || !data.success) {
+          showToast(data.error || 'الدفع بالبطاقة غير مُفعّل حالياً. يرجى اختيار الدفع عند الاستلام أو PayPal.', 'info');
+          setIsProcessing(false);
+          return;
+        }
+        cardPayment = { chargeId: data.chargeId, last4: cardState.last4, brand: cardState.brand };
+      } catch (err) {
+        showToast('تعذّر إتمام الدفع بالبطاقة حالياً.', 'error');
+        setIsProcessing(false);
+        return;
+      }
+    }
+
     setIsProcessing(true);
 
     try {
@@ -350,7 +389,8 @@ export default function Checkout() {
           items: payloadItems,
           customerInfo: { ...formData, email: user ? user.email : formData.email || '' },
           promoCode: appliedPromo ? appliedPromo.code : null,
-          paymentMethod
+          paymentMethod,
+          cardPayment // { chargeId, last4, brand } when a card charge succeeded
         })
       });
       const data = await res.json();
@@ -474,6 +514,14 @@ export default function Checkout() {
                   </h3>
                   <div style={{ display: 'flex', gap: '10px', flexWrap: 'wrap' }}>
 
+                    {/* Credit / Debit Card */}
+                    {CARD_ENABLED && (
+                      <button type="button" onClick={() => setPaymentMethod('card')} style={pmStyle('card')}>
+                        <i className="fa-solid fa-credit-card" style={{ fontSize: '1.5rem', color: paymentMethod === 'card' ? 'var(--accent-color)' : 'var(--text-secondary)' }}></i>
+                        <span style={{ fontWeight: 600, fontSize: '0.85rem', color: paymentMethod === 'card' ? 'var(--accent-color)' : 'var(--text-primary)' }}>بطاقة ائتمان</span>
+                      </button>
+                    )}
+
                     {/* Cash on Delivery */}
                     <button type="button" onClick={() => setPaymentMethod('cash')} style={pmStyle('cash')}>
                       <i className="fa-solid fa-money-bill-wave" style={{ fontSize: '1.5rem', color: paymentMethod === 'cash' ? '#28a745' : 'var(--text-secondary)' }}></i>
@@ -487,6 +535,11 @@ export default function Checkout() {
                     </button>
                   </div>
                 </div>
+
+                {/* Card Details */}
+                {paymentMethod === 'card' && (
+                  <CardForm onChange={setCardState} />
+                )}
 
                 {/* Cash on Delivery Info */}
                 {paymentMethod === 'cash' && (
@@ -523,6 +576,8 @@ export default function Checkout() {
                   <button type="submit" className="btn-primary" disabled={isProcessing} style={{ padding: '1rem', flex: 2, opacity: isProcessing ? 0.7 : 1 }}>
                     {isProcessing ? (
                       <><i className="fa-solid fa-spinner fa-spin"></i> {t('processing')}</>
+                    ) : paymentMethod === 'card' ? (
+                      <><i className="fa-solid fa-lock"></i> ادفع ₪{Number(finalTotal).toFixed(2)} بالبطاقة</>
                     ) : paymentMethod === 'paypal' ? (
                       <><i className="fa-brands fa-paypal"></i> ادفع عبر PayPal</>
                     ) : (

@@ -222,6 +222,20 @@ export default function AdminDashboard() {
     window.location.replace('/login');
   };
 
+  // Manually set an order's payment status (e.g. confirm a bank transfer, or
+  // before the card gateway pipeline is live).
+  const markOrderPaid = async (orderId, status) => {
+    try {
+      await updateOrderDoc(orderId, { paymentStatus: status });
+      setOrders(prev => prev.map(o => o.id === orderId ? { ...o, paymentStatus: status } : o));
+      setSelectedOrder(prev => prev && prev.id === orderId ? { ...prev, paymentStatus: status } : prev);
+      showToast(status === 'paid' ? 'تم تحديد الطلب كمدفوع' : 'تم تحديث حالة الدفع', 'success');
+    } catch (e) {
+      console.error(e);
+      showToast('فشل تحديث حالة الدفع', 'error');
+    }
+  };
+
   // --- ALGOLIA SEARCH INDEX SYNC ---
   const syncSearchIndex = async (product) => {
     try {
@@ -3004,7 +3018,22 @@ export default function AdminDashboard() {
                   <div className="detail-item"><span>العنوان</span><strong>{(selectedOrder.shipping?.neighborhood || selectedOrder.customerInfo?.neighborhood)} - {(selectedOrder.shipping?.street || selectedOrder.customerInfo?.street)}</strong></div>
                   <div className="detail-item"><span>البريد الإلكتروني</span><strong>{selectedOrder.customerInfo?.email || selectedOrder.shipping?.email || '—'}</strong></div>
                   <div className="detail-item"><span>هاتف بديل</span><strong dir="ltr">{selectedOrder.shipping?.phone2 || selectedOrder.customerInfo?.phone2 || '—'}</strong></div>
-                  <div className="detail-item"><span>طريقة الدفع</span><strong>{selectedOrder.paymentMethod === 'cash' ? '💵 الدفع عند الاستلام' : selectedOrder.paymentMethod === 'paypal' ? '🔵 PayPal' : '💳 بطاقة ائتمان'}</strong></div>
+                  <div className="detail-item"><span>طريقة الدفع</span><strong>{selectedOrder.paymentMethod === 'cash' ? '💵 الدفع عند الاستلام' : selectedOrder.paymentMethod === 'paypal' ? '🔵 PayPal' : '💳 بطاقة ائتمان'}{selectedOrder.payment?.last4 ? ` ••${selectedOrder.payment.last4}` : ''}</strong></div>
+                  <div className="detail-item">
+                    <span>حالة الدفع</span>
+                    <strong style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
+                      {(() => {
+                        const ps = selectedOrder.paymentStatus || (selectedOrder.paymentMethod === 'cash' ? 'cod' : 'pending');
+                        const map = { paid: { t: 'مدفوع', c: '#28a745' }, cod: { t: 'عند الاستلام', c: '#e6a800' }, pending: { t: 'بانتظار الدفع', c: '#e67e22' }, refunded: { t: 'مُسترد', c: '#e74c3c' } };
+                        const m = map[ps] || map.pending;
+                        return <span style={{ padding: '3px 10px', borderRadius: '20px', fontSize: '0.8rem', fontWeight: 700, background: `${m.c}22`, color: m.c }}>{m.t}</span>;
+                      })()}
+                      <button onClick={() => markOrderPaid(selectedOrder.id, (selectedOrder.paymentStatus === 'paid') ? 'pending' : 'paid')}
+                        style={{ fontSize: '0.75rem', padding: '3px 10px', borderRadius: '6px', border: '1px solid var(--border-color)', background: 'transparent', cursor: 'pointer', color: 'var(--text-primary)' }}>
+                        {selectedOrder.paymentStatus === 'paid' ? 'تحديد كغير مدفوع' : 'تحديد كمدفوع'}
+                      </button>
+                    </strong>
+                  </div>
                   <div className="detail-item"><span>حالة الطلب</span><strong>{selectedOrder.status}</strong></div>
                   <div className="detail-item"><span>تاريخ الطلب</span><strong>{selectedOrder.date ? new Date(selectedOrder.date).toLocaleString('ar-EG') : '—'}</strong></div>
                   {selectedOrder.promoCode && <div className="detail-item"><span>كود الخصم</span><strong>{selectedOrder.promoCode}</strong></div>}

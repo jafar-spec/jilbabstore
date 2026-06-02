@@ -8,23 +8,25 @@ const CartContext = createContext();
 export function CartProvider({ children }) {
   const [cart, setCart] = useState([]);
   const [isCartOpen, setIsCartOpen] = useState(false);
-  const hydrated = useRef(false);
+  // State (not a ref) so the save effect re-runs once hydration is done and is
+  // skipped before then — prevents the empty default from overwriting a saved
+  // cart, including under React StrictMode's double-mount.
+  const [isHydrated, setIsHydrated] = useState(false);
 
-  // Load from localStorage on mount (mocking persistence for now)
+  // Load from localStorage on mount.
   useEffect(() => {
     const savedCart = localStorage.getItem('cart');
     if (savedCart) {
       try { setCart(JSON.parse(savedCart)); } catch (e) {}
     }
-    hydrated.current = true;
+    setIsHydrated(true);
   }, []);
 
-  // Save to localStorage when cart changes (skip until initial load completes
-  // so the empty default state can't overwrite a saved cart)
+  // Save to localStorage when cart changes (only after hydration completes).
   useEffect(() => {
-    if (!hydrated.current) return;
+    if (!isHydrated) return;
     localStorage.setItem('cart', JSON.stringify(cart));
-  }, [cart]);
+  }, [cart, isHydrated]);
 
   const addToCart = (product) => {
     let exceededStock = false;
