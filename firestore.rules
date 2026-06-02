@@ -51,6 +51,12 @@ service cloud.firestore {
       allow write: if isAdmin();
     }
 
+    // Editable informational pages — public read, admin write.
+    match /pages/{document=**} {
+      allow read: if true;
+      allow write: if isAdmin();
+    }
+
     // Promo Codes — Public read for checkout validation, admin write
     match /promocodes/{document=**} {
       allow read: if true;

@@ -18,10 +18,12 @@ import {
   updateOrderRouteSequence, getAllReviews, updateReview, deleteReview,
   setVariantStock, adjustVariantStock, getStockMovements,
   getPurchaseOrders, createPurchaseOrder, receivePurchaseOrder, deletePurchaseOrder,
+  getPage, updatePage,
 } from '@/lib/db';
 import AdminMap from '@/components/AdminMap';
 import { useAuth } from '@/context/AuthContext';
 import { uploadDataUrl } from '@/lib/uploads';
+import { PAGES, PAGE_DEFAULTS } from '@/lib/pageContent';
 
 // Helper function to compress images before saving as Base64 to avoid huge payloads
 const compressImage = (file, maxWidth = 800, maxHeight = 800) => {
@@ -111,6 +113,11 @@ export default function AdminDashboard() {
   const [stockMovements, setStockMovements] = useState([]);
   const [purchaseOrders, setPurchaseOrders] = useState([]);
   const [poDraft, setPoDraft] = useState({ supplier: '', lines: [] });
+
+  // EDITABLE PAGES STATE
+  const [activePageSlug, setActivePageSlug] = useState(null);
+  const [pageDraft, setPageDraft] = useState(null);
+  const [pageSaving, setPageSaving] = useState(false);
 
 
 
@@ -247,6 +254,48 @@ export default function AdminDashboard() {
       const d = await res.json();
       showToast(res.ok ? `تمت فهرسة ${d.indexed} منتج للبحث` : (d.error || 'فشل الفهرسة'), res.ok ? 'success' : 'error');
     } catch (e) { showToast('فشل الفهرسة', 'error'); }
+  };
+
+  // --- EDITABLE PAGES (About/FAQ/Shipping/Contact/Privacy/Returns/Terms) ---
+  const openPageEditor = async (slug) => {
+    setActivePageSlug(slug);
+    setPageDraft(null);
+    try {
+      const data = (await getPage(slug)) || PAGE_DEFAULTS[slug] || { title: '', blocks: [] };
+      setPageDraft(JSON.parse(JSON.stringify({ title: data.title || '', blocks: data.blocks || [] })));
+    } catch (e) {
+      setPageDraft(JSON.parse(JSON.stringify(PAGE_DEFAULTS[slug] || { title: '', blocks: [] })));
+    }
+  };
+  const setPageTitle = (title) => setPageDraft(d => ({ ...d, title }));
+  const setPageBlock = (i, patch) => setPageDraft(d => ({ ...d, blocks: d.blocks.map((b, idx) => idx === i ? { ...b, ...patch } : b) }));
+  const addPageBlock = () => setPageDraft(d => ({ ...d, blocks: [...(d.blocks || []), { heading: '', body: '' }] }));
+  const removePageBlock = (i) => setPageDraft(d => ({ ...d, blocks: d.blocks.filter((_, idx) => idx !== i) }));
+  const movePageBlock = (i, dir) => setPageDraft(d => {
+    const blocks = [...d.blocks];
+    const j = i + dir;
+    if (j < 0 || j >= blocks.length) return d;
+    [blocks[i], blocks[j]] = [blocks[j], blocks[i]];
+    return { ...d, blocks };
+  });
+  const savePage = async () => {
+    if (!activePageSlug || !pageDraft) return;
+    setPageSaving(true);
+    try {
+      await updatePage(activePageSlug, { title: pageDraft.title, blocks: pageDraft.blocks });
+      showToast('تم حفظ الصفحة بنجاح', 'success');
+    } catch (e) {
+      console.error(e);
+      showToast('فشل حفظ الصفحة', 'error');
+    } finally {
+      setPageSaving(false);
+    }
+  };
+  const resetPageToDefault = () => {
+    if (activePageSlug && PAGE_DEFAULTS[activePageSlug]) {
+      setPageDraft(JSON.parse(JSON.stringify(PAGE_DEFAULTS[activePageSlug])));
+      showToast('تمت استعادة المحتوى الافتراضي (لم يُحفظ بعد)', 'info');
+    }
   };
 
   // --- COURIER / STAFF MANAGEMENT ---
@@ -1221,6 +1270,9 @@ export default function AdminDashboard() {
               <button onClick={() => { setActiveTab('purchase'); loadPurchaseOrders(); }} style={navButtonStyle(activeTab === 'purchase')}>
                 <i className="fa-solid fa-dolly" style={{ marginLeft: '10px' }}></i> أوامر التوريد
               </button>
+              <button onClick={() => { setActiveTab('pages'); setActivePageSlug(null); setPageDraft(null); }} style={navButtonStyle(activeTab === 'pages')}>
+                <i className="fa-solid fa-file-lines" style={{ marginLeft: '10px' }}></i> الصفحات
+              </button>
             </>
           )}
 
@@ -1250,6 +1302,7 @@ export default function AdminDashboard() {
               activeTab === 'couriers' ? 'إدارة المندوبين' :
               activeTab === 'movements' ? 'سجل حركة المخزون' :
               activeTab === 'purchase' ? 'أوامر التوريد (إعادة التخزين)' :
+              activeTab === 'pages' ? 'إدارة صفحات المحتوى' :
               activeTab === 'orders' ? 'إدارة الطلبات الواردة' :
               activeTab === 'delivery' ? 'طلبات التوصيل الخاصة بك' : 'بيانات التوصيل والتوزيع'}
           </h1>
@@ -2866,6 +2919,63 @@ export default function AdminDashboard() {
                     </div>
                   )}
                 </div>
+              </div>
+            )}
+
+            {/* EDITABLE PAGES TAB */}
+            {activeTab === 'pages' && role === 'operator' && (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem', maxWidth: '900px' }}>
+                <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap' }}>
+                  {PAGES.map(p => (
+                    <button key={p.slug} onClick={() => openPageEditor(p.slug)}
+                      style={{ padding: '0.5rem 1rem', borderRadius: '999px', cursor: 'pointer', fontWeight: 600,
+                        border: activePageSlug === p.slug ? '2px solid var(--accent-color)' : '1px solid var(--border-color)',
+                        background: activePageSlug === p.slug ? 'rgba(108,92,231,0.08)' : 'var(--surface-color)',
+                        color: 'var(--text-primary)' }}>
+                      {p.label}
+                    </button>
+                  ))}
+                </div>
+
+                {!activePageSlug && (
+                  <EmptyState icon="fa-file-lines" text="اختر صفحة من الأعلى لتحرير محتواها." />
+                )}
+
+                {activePageSlug && !pageDraft && (
+                  <div style={{ padding: '2rem', textAlign: 'center', color: 'var(--text-secondary)' }}>جاري التحميل...</div>
+                )}
+
+                {activePageSlug && pageDraft && (
+                  <div style={{ background: 'var(--surface-color)', padding: '1.5rem', borderRadius: '16px', border: '1px solid var(--glass-border)', display: 'flex', flexDirection: 'column', gap: '1rem' }}>
+                    <div>
+                      <label className="admin-label">عنوان الصفحة</label>
+                      <input type="text" value={pageDraft.title} onChange={e => setPageTitle(e.target.value)} className="admin-input" />
+                    </div>
+
+                    {(pageDraft.blocks || []).map((b, i) => (
+                      <div key={i} style={{ border: '1px solid var(--border-color)', borderRadius: '10px', padding: '1rem', background: 'var(--bg-color)' }}>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.5rem' }}>
+                          <span style={{ fontSize: '0.8rem', color: 'var(--text-secondary)' }}>قسم {i + 1}</span>
+                          <div style={{ display: 'flex', gap: '0.3rem' }}>
+                            <button type="button" aria-label="تحريك لأعلى" onClick={() => movePageBlock(i, -1)} style={{ border: '1px solid var(--border-color)', background: 'transparent', borderRadius: '6px', cursor: 'pointer', padding: '0.2rem 0.5rem' }}><i className="fa-solid fa-arrow-up"></i></button>
+                            <button type="button" aria-label="تحريك لأسفل" onClick={() => movePageBlock(i, 1)} style={{ border: '1px solid var(--border-color)', background: 'transparent', borderRadius: '6px', cursor: 'pointer', padding: '0.2rem 0.5rem' }}><i className="fa-solid fa-arrow-down"></i></button>
+                            <button type="button" aria-label="حذف القسم" onClick={() => removePageBlock(i)} style={{ border: 'none', background: 'rgba(231,76,60,0.1)', color: '#e74c3c', borderRadius: '6px', cursor: 'pointer', padding: '0.2rem 0.6rem' }}><i className="fa-solid fa-trash"></i></button>
+                          </div>
+                        </div>
+                        <input type="text" placeholder="العنوان (اختياري)" value={b.heading || ''} onChange={e => setPageBlock(i, { heading: e.target.value })} className="admin-input" style={{ marginBottom: '0.5rem' }} />
+                        <textarea placeholder="النص (كل سطر فقرة منفصلة)" value={b.body || ''} onChange={e => setPageBlock(i, { body: e.target.value })} className="admin-input" style={{ minHeight: '100px' }} />
+                      </div>
+                    ))}
+
+                    <div style={{ display: 'flex', gap: '0.75rem', flexWrap: 'wrap' }}>
+                      <button type="button" onClick={addPageBlock} style={{ padding: '0.6rem 1rem', borderRadius: '8px', border: '1px dashed var(--border-color)', background: 'transparent', cursor: 'pointer', color: 'var(--text-primary)' }}><i className="fa-solid fa-plus"></i> إضافة قسم</button>
+                      <button type="button" onClick={resetPageToDefault} style={{ padding: '0.6rem 1rem', borderRadius: '8px', border: '1px solid var(--border-color)', background: 'transparent', cursor: 'pointer', color: 'var(--text-secondary)' }}>استعادة الافتراضي</button>
+                      <button type="button" onClick={savePage} disabled={pageSaving} className="btn-primary" style={{ padding: '0.6rem 1.5rem', marginInlineStart: 'auto' }}>
+                        {pageSaving ? 'جاري الحفظ...' : 'حفظ الصفحة'}
+                      </button>
+                    </div>
+                  </div>
+                )}
               </div>
             )}
 
