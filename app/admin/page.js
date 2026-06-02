@@ -2166,8 +2166,12 @@ export default function AdminDashboard() {
                         <input type="number" min="0" value={cmsSettings.shippingCost || 30} onChange={e => setCmsSettings({...cmsSettings, shippingCost: Number(e.target.value)})} className="admin-input" />
                       </div>
                       <div>
-                        <label className="admin-label">بريد تنبيهات المخزون (Low-stock alert email)</label>
+                        <label className="admin-label">بريد التنبيهات (طلبات جديدة + مخزون منخفض)</label>
                         <input type="email" dir="ltr" placeholder="owner@example.com" value={cmsSettings.alertEmail || ''} onChange={e => setCmsSettings({...cmsSettings, alertEmail: e.target.value.trim()})} className="admin-input" />
+                      </div>
+                      <div>
+                        <label className="admin-label">هاتف تنبيهات الطلبات (SMS) — رقمك</label>
+                        <input type="tel" dir="ltr" placeholder="+9725XXXXXXXX" value={cmsSettings.alertPhone || ''} onChange={e => setCmsSettings({...cmsSettings, alertPhone: e.target.value.trim()})} className="admin-input" />
                       </div>
                     </div>
                   </div>

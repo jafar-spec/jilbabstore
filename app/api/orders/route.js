@@ -3,6 +3,7 @@ import { FieldValue } from 'firebase-admin/firestore';
 import { adminAuth, adminDb } from '@/lib/firebaseAdmin';
 import { rateLimit, clientIp } from '@/lib/rateLimit';
 import { sendEmail, orderConfirmationHtml, lowStockAlertHtml, newOrderAdminHtml } from '@/lib/email';
+import { sendSms } from '@/lib/sms';
 
 // Authoritative order creation. The client may send item ids/sizes/quantities,
 // but ALL money (prices, discount, shipping, total) is recomputed here from
@@ -221,6 +222,17 @@ export async function POST(req) {
         subject: `🛒 طلب جديد #${orderRef.id.slice(0, 8).toUpperCase()} — ₪${total.toFixed(2)}`,
         html: newOrderAdminHtml(orderDoc, orderRef.id)
       }).catch(() => {});
+    }
+
+    // SMS notifications at order placement (best-effort; no-op if Twilio unset).
+    const orderNum = orderRef.id.slice(0, 8).toUpperCase();
+    const custPhone = safeCustomerInfo.phone || safeCustomerInfo.phone1;
+    if (custPhone) {
+      sendSms(custPhone, `تم استلام طلبك #${orderNum} بقيمة ₪${total.toFixed(2)} من متجر جلباب. سنتواصل معك لتأكيد التوصيل.`).catch(() => {});
+    }
+    if (settings.alertPhone) {
+      const cName = safeCustomerInfo.fullName || 'عميل';
+      sendSms(settings.alertPhone, `🛒 طلب جديد #${orderNum} — ₪${total.toFixed(2)} | ${cName} | ${custPhone || ''} | ${safeCustomerInfo.city || ''}`).catch(() => {});
     }
 
     // Low-stock alert to the operator (if an alert email is configured).
