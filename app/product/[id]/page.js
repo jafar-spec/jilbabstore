@@ -97,15 +97,19 @@ export default async function ProductPage({ params }) {
   const avg = ratings.length ? ratings.reduce((s, r) => s + r.rating, 0) / ratings.length : null;
   const ogImage = (product.images?.[0] && !product.images[0].startsWith('data:')) ? product.images[0] : undefined;
   const totalStock = (product.variants || []).reduce((s, v) => s + ((Number(v.stock) || 0) - (Number(v.reserved) || 0)), 0);
+  const productUrl = `https://jilbab.store/product/${id}`;
   const jsonLd = {
     '@context': 'https://schema.org',
     '@type': 'Product',
     name: product.title,
     description: product.description || product.title,
+    brand: { '@type': 'Brand', name: 'Jilbab Store' },
     ...(ogImage ? { image: ogImage } : {}),
     ...(product.category ? { category: product.category } : {}),
+    ...((product.variants || []).find(v => v.sku)?.sku ? { sku: (product.variants || []).find(v => v.sku).sku } : {}),
     offers: {
       '@type': 'Offer',
+      url: productUrl,
       priceCurrency: 'ILS',
       price: Number(product.price) || 0,
       availability: totalStock > 0 ? 'https://schema.org/InStock' : 'https://schema.org/OutOfStock',
@@ -113,9 +117,23 @@ export default async function ProductPage({ params }) {
     ...(avg ? { aggregateRating: { '@type': 'AggregateRating', ratingValue: avg.toFixed(1), reviewCount: ratings.length } } : {}),
   };
 
+  // Breadcrumb trail for richer search results: Home → Shop → (category) → product.
+  const crumbs = [
+    { name: 'الرئيسية', item: 'https://jilbab.store' },
+    { name: 'المتجر', item: 'https://jilbab.store/shop' },
+    ...(product.category ? [{ name: product.category, item: `https://jilbab.store/shop` }] : []),
+    { name: product.title, item: productUrl },
+  ];
+  const breadcrumbLd = {
+    '@context': 'https://schema.org',
+    '@type': 'BreadcrumbList',
+    itemListElement: crumbs.map((c, i) => ({ '@type': 'ListItem', position: i + 1, name: c.name, item: c.item })),
+  };
+
   return (
     <>
       <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }} />
+      <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(breadcrumbLd) }} />
       <ClientProductDetail
         initialProduct={sanitize(product)}
         initialReviews={sanitize(reviews)}

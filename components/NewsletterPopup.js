@@ -103,7 +103,7 @@ export default function NewsletterPopup() {
               type="button"
               onClick={() => { navigator.clipboard?.writeText(doneCode).then(() => { setCopied(true); setTimeout(() => setCopied(false), 1800); }).catch(() => {}); }}
               aria-label="نسخ كود الخصم"
-              style={{ display: 'inline-flex', alignItems: 'center', gap: '10px', padding: '0.75rem 1.5rem', borderRadius: '12px', border: '2px dashed var(--accent-color)', background: 'rgba(124,58,237,0.06)', cursor: 'pointer', fontSize: '1.3rem', fontWeight: 800, letterSpacing: '0.15em', color: 'var(--accent-color)' }}
+              style={{ display: 'inline-flex', alignItems: 'center', gap: '10px', padding: '0.75rem 1.5rem', borderRadius: '12px', border: '2px dashed var(--accent-color)', background: 'var(--accent-soft)', cursor: 'pointer', fontSize: '1.3rem', fontWeight: 800, letterSpacing: '0.15em', color: 'var(--accent-color)' }}
             >
               {doneCode}
               <i className={copied ? 'fa-solid fa-check' : 'fa-regular fa-copy'} style={{ fontSize: '0.9rem' }}></i>

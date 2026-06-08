@@ -1,5 +1,5 @@
 "use client";
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useLanguage } from '@/context/LanguageContext';
 import Link from 'next/link';
 
@@ -10,24 +10,44 @@ export default function TrackOrder() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
 
-  const handleTrack = async (e) => {
+  // Guest return request (from the tracking page)
+  const [showReturn, setShowReturn] = useState(false);
+  const [retPhone, setRetPhone] = useState('');
+  const [retReason, setRetReason] = useState('');
+  const [retBusy, setRetBusy] = useState(false);
+  const [retMsg, setRetMsg] = useState(null); // { type, text }
+
+  const submitGuestReturn = async (e) => {
     e.preventDefault();
-    if (!orderId.trim()) return;
-    
+    if (retBusy) return;
+    setRetBusy(true); setRetMsg(null);
+    try {
+      const res = await fetch('/api/returns/request', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ orderId: order.id, phone: retPhone.trim(), reason: retReason.trim() }),
+      });
+      const data = await res.json();
+      if (!res.ok) { setRetMsg({ type: 'error', text: data.error || 'تعذّر إرسال الطلب' }); }
+      else { setRetMsg({ type: 'success', text: 'تم إرسال طلب الإرجاع بنجاح، سنتواصل معك قريباً ✓' }); setShowReturn(false); }
+    } catch {
+      setRetMsg({ type: 'error', text: 'تعذّر إرسال الطلب' });
+    } finally { setRetBusy(false); }
+  };
+
+  const doTrack = async (id) => {
+    if (!id || !id.trim()) return;
     setLoading(true);
     setError('');
     setOrder(null);
-    
     try {
       const res = await fetch('/api/track-order', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ orderId: orderId.trim() })
+        body: JSON.stringify({ orderId: id.trim() })
       });
-      
       if (res.ok) {
-        const data = await res.json();
-        setOrder(data);
+        setOrder(await res.json());
       } else {
         setError(t('orderNotFound'));
       }
@@ -38,11 +58,24 @@ export default function TrackOrder() {
     }
   };
 
+  const handleTrack = (e) => { e.preventDefault(); doTrack(orderId); };
+
+  // Auto-track when arriving from the order-confirmation page (?order=...).
+  useEffect(() => {
+    try {
+      const id = new URLSearchParams(window.location.search).get('order');
+      if (id) { setOrderId(id); doTrack(id); }
+    } catch (e) { /* ignore */ }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
   const getStatusStep = (status) => {
-    if (status === 'قيد المعالجة' || status === 'قيد المعالجة (مدفوع)') return 1;
-    if (status === 'جاري التوصيل') return 2;
-    if (status === 'تم التوصيل') return 3;
-    if (status === 'ملغي') return -1;
+    const s = status || '';
+    if (s === 'ملغي' || s === 'مرتجع') return -1;
+    if (s === 'تم التوصيل') return 4;
+    if (s === 'جاري التوصيل') return 3;
+    if (s === 'تم التجهيز') return 2;
+    if (s.includes('قيد المعالجة')) return 1;
     return 0;
   };
 
@@ -91,38 +124,27 @@ export default function TrackOrder() {
           ) : (
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', position: 'relative', marginBottom: '3rem', padding: '0 1rem' }}>
               <div style={{ position: 'absolute', top: '24px', left: '10%', right: '10%', height: '4px', background: 'var(--border-color)', zIndex: 1 }}>
-                <div style={{ height: '100%', background: 'var(--accent-color)', width: getStatusStep(order.status) === 1 ? '0%' : getStatusStep(order.status) === 2 ? '50%' : '100%', transition: 'width 0.5s ease' }}></div>
-              </div>
-              
-              {/* Step 1 */}
-              <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', zIndex: 2, gap: '0.5rem', width: '33%' }}>
-                <div style={{ width: '50px', height: '50px', borderRadius: '50%', background: getStatusStep(order.status) >= 1 ? 'var(--accent-color)' : 'var(--surface-color)', color: getStatusStep(order.status) >= 1 ? '#fff' : 'var(--text-secondary)', display: 'flex', justifyContent: 'center', alignItems: 'center', border: `2px solid ${getStatusStep(order.status) >= 1 ? 'var(--accent-color)' : 'var(--border-color)'}`, transition: 'all 0.3s ease' }}>
-                  <i className="fa-solid fa-box"></i>
-                </div>
-                <span style={{ fontWeight: getStatusStep(order.status) >= 1 ? 'bold' : 'normal', color: getStatusStep(order.status) >= 1 ? 'var(--text-primary)' : 'var(--text-secondary)' }}>
-                  {t('statusProcessing')}
-                </span>
+                <div style={{ height: '100%', background: 'var(--accent-color)', width: `${Math.max(0, (getStatusStep(order.status) - 1)) / 3 * 100}%`, transition: 'width 0.5s ease' }}></div>
               </div>
 
-              {/* Step 2 */}
-              <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', zIndex: 2, gap: '0.5rem', width: '33%' }}>
-                <div style={{ width: '50px', height: '50px', borderRadius: '50%', background: getStatusStep(order.status) >= 2 ? 'var(--accent-color)' : 'var(--surface-color)', color: getStatusStep(order.status) >= 2 ? '#fff' : 'var(--text-secondary)', display: 'flex', justifyContent: 'center', alignItems: 'center', border: `2px solid ${getStatusStep(order.status) >= 2 ? 'var(--accent-color)' : 'var(--border-color)'}`, transition: 'all 0.3s ease' }}>
-                  <i className="fa-solid fa-truck-fast"></i>
-                </div>
-                <span style={{ fontWeight: getStatusStep(order.status) >= 2 ? 'bold' : 'normal', color: getStatusStep(order.status) >= 2 ? 'var(--text-primary)' : 'var(--text-secondary)' }}>
-                  {t('statusDelivery')}
-                </span>
-              </div>
-
-              {/* Step 3 */}
-              <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', zIndex: 2, gap: '0.5rem', width: '33%' }}>
-                <div style={{ width: '50px', height: '50px', borderRadius: '50%', background: getStatusStep(order.status) >= 3 ? '#27ae60' : 'var(--surface-color)', color: getStatusStep(order.status) >= 3 ? '#fff' : 'var(--text-secondary)', display: 'flex', justifyContent: 'center', alignItems: 'center', border: `2px solid ${getStatusStep(order.status) >= 3 ? '#27ae60' : 'var(--border-color)'}`, transition: 'all 0.3s ease' }}>
-                  <i className="fa-solid fa-check"></i>
-                </div>
-                <span style={{ fontWeight: getStatusStep(order.status) >= 3 ? 'bold' : 'normal', color: getStatusStep(order.status) >= 3 ? 'var(--text-primary)' : 'var(--text-secondary)' }}>
-                  {t('statusDelivered')}
-                </span>
-              </div>
+              {[
+                { step: 1, icon: 'fa-box', label: t('statusProcessing'), done: 'var(--accent-color)' },
+                { step: 2, icon: 'fa-box-open', label: 'تم التجهيز', done: 'var(--accent-color)' },
+                { step: 3, icon: 'fa-truck-fast', label: t('statusDelivery'), done: 'var(--accent-color)' },
+                { step: 4, icon: 'fa-check', label: t('statusDelivered'), done: '#27ae60' },
+              ].map(({ step, icon, label, done }) => {
+                const reached = getStatusStep(order.status) >= step;
+                return (
+                  <div key={step} style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', zIndex: 2, gap: '0.5rem', width: '25%' }}>
+                    <div style={{ width: '50px', height: '50px', borderRadius: '50%', background: reached ? done : 'var(--surface-color)', color: reached ? '#fff' : 'var(--text-secondary)', display: 'flex', justifyContent: 'center', alignItems: 'center', border: `2px solid ${reached ? done : 'var(--border-color)'}`, transition: 'all 0.3s ease' }}>
+                      <i className={`fa-solid ${icon}`}></i>
+                    </div>
+                    <span style={{ fontWeight: reached ? 'bold' : 'normal', color: reached ? 'var(--text-primary)' : 'var(--text-secondary)', fontSize: '0.85rem', textAlign: 'center' }}>
+                      {label}
+                    </span>
+                  </div>
+                );
+              })}
             </div>
           )}
 
@@ -141,7 +163,41 @@ export default function TrackOrder() {
               </div>
             )}
           </div>
-          
+
+          {/* Guest return request — only once the order is delivered */}
+          {order.status === 'تم التوصيل' && (
+            <div style={{ marginTop: '1.5rem', borderTop: '1px solid var(--border-color)', paddingTop: '1.5rem' }}>
+              {retMsg && (
+                <div style={{ padding: '0.8rem 1rem', borderRadius: '10px', marginBottom: '1rem', fontWeight: 600,
+                  background: retMsg.type === 'success' ? '#ecfdf5' : '#fef2f2', color: retMsg.type === 'success' ? '#059669' : '#dc2626' }}>
+                  {retMsg.text}
+                </div>
+              )}
+              {!showReturn && retMsg?.type !== 'success' && (
+                <button onClick={() => setShowReturn(true)}
+                  style={{ display: 'inline-flex', alignItems: 'center', gap: '8px', padding: '0.7rem 1.4rem', borderRadius: '99px', border: '1px solid var(--border-color)', background: 'transparent', color: 'var(--text-primary)', cursor: 'pointer', fontWeight: 600 }}>
+                  <i className="fa-solid fa-rotate-left"></i> طلب إرجاع / استرداد
+                </button>
+              )}
+              {showReturn && (
+                <form onSubmit={submitGuestReturn} style={{ background: 'var(--bg-color)', border: '1px solid var(--glass-border)', borderRadius: '12px', padding: '1.2rem', display: 'flex', flexDirection: 'column', gap: '0.8rem' }}>
+                  <strong>طلب إرجاع للطلب #{order.id.slice(0, 8)}</strong>
+                  <p style={{ margin: 0, fontSize: '0.85rem', color: 'var(--text-secondary)' }}>أدخل رقم الهاتف المستخدم في الطلب للتحقق.</p>
+                  <input type="tel" dir="ltr" required value={retPhone} onChange={e => setRetPhone(e.target.value)} placeholder="05XXXXXXXX"
+                    style={{ padding: '0.8rem', borderRadius: '10px', border: '1px solid var(--border-color)', background: 'var(--surface-color)', color: 'var(--text-primary)' }} />
+                  <textarea required value={retReason} onChange={e => setRetReason(e.target.value)} placeholder="سبب الإرجاع…" rows={3}
+                    style={{ padding: '0.8rem', borderRadius: '10px', border: '1px solid var(--border-color)', background: 'var(--surface-color)', color: 'var(--text-primary)', fontFamily: 'inherit', resize: 'vertical' }} />
+                  <div style={{ display: 'flex', gap: '0.6rem' }}>
+                    <button type="submit" disabled={retBusy || !retPhone.trim() || !retReason.trim()} className="btn-primary" style={{ padding: '0.7rem 1.4rem', borderRadius: '10px', opacity: (retBusy || !retPhone.trim() || !retReason.trim()) ? 0.6 : 1 }}>
+                      {retBusy ? '...' : 'إرسال الطلب'}
+                    </button>
+                    <button type="button" onClick={() => setShowReturn(false)} style={{ padding: '0.7rem 1.2rem', borderRadius: '10px', border: '1px solid var(--border-color)', background: 'transparent', color: 'var(--text-secondary)', cursor: 'pointer' }}>إلغاء</button>
+                  </div>
+                </form>
+              )}
+            </div>
+          )}
+
         </div>
       )}
     </div>

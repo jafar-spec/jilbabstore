@@ -15,16 +15,17 @@ const isExternal = (h) => /^https?:\/\//i.test(h);
 const safeHref = (h) => (typeof h === 'string' && (h.startsWith('/') || isExternal(h)) ? h.trim() : null);
 
 const ctaStyle = {
-  display: 'inline-block', background: '#fff', color: '#000',
-  padding: '0.75rem 2rem', fontSize: '0.85rem', fontWeight: 700,
-  textTransform: 'uppercase', letterSpacing: '0.1em', textDecoration: 'none',
-  transition: 'all 0.3s', border: '2px solid #fff'
+  display: 'inline-block', background: '#fff', color: '#1c1a19',
+  padding: '0.8rem 2.2rem', fontSize: '0.82rem', fontWeight: 700,
+  letterSpacing: '0.05em', textDecoration: 'none', borderRadius: '999px',
+  transition: 'all 0.3s', border: '1.5px solid #fff', boxShadow: '0 8px 24px rgba(0,0,0,0.22)'
 };
 const ctaOver = (e) => { e.currentTarget.style.background = 'transparent'; e.currentTarget.style.color = '#fff'; };
-const ctaOut = (e) => { e.currentTarget.style.background = '#fff'; e.currentTarget.style.color = '#000'; };
+const ctaOut = (e) => { e.currentTarget.style.background = '#fff'; e.currentTarget.style.color = '#1c1a19'; };
 
 export default function AdsBanner() {
   const { storeSettings, lang } = useLanguage();
+  const isRtl = lang !== 'en';
   const [current, setCurrent] = useState(0);
 
   const ads = (storeSettings?.ads || []).filter(ad => ad.active && (ad.imageUrl || ad.title || ad[`title_${lang}`] || ad.title_ar));
@@ -40,9 +41,9 @@ export default function AdsBanner() {
   const ad = ads[current];
 
   return (
-    <section style={{ position: 'relative', width: '100%', overflow: 'hidden', background: 'var(--surface-color)' }}>
-      {/* Slides */}
-      <div style={{ position: 'relative', height: 'clamp(200px, 35vw, 480px)' }}>
+    <section style={{ background: 'var(--bg-color)', padding: 'clamp(2rem, 5vw, 4rem) clamp(1rem, 5%, 5rem)' }}>
+      {/* Contained, rounded promo card (separates it cleanly from the hero) */}
+      <div style={{ position: 'relative', maxWidth: '1320px', margin: '0 auto', height: 'clamp(220px, 34vw, 460px)', borderRadius: 'var(--radius-xl)', overflow: 'hidden', boxShadow: 'var(--shadow-md)' }}>
         {ads.map((a, idx) => (
           <div
             key={idx}
@@ -54,29 +55,31 @@ export default function AdsBanner() {
             }}
           >
             {a.imageUrl && (
-              <Image src={a.imageUrl} alt={a.title || 'Ad Banner'} fill style={{ objectFit: 'cover' }} />
+              <Image src={a.imageUrl} alt={a.title || 'Ad Banner'} fill sizes="100vw" quality={72} priority={idx === current} style={{ objectFit: 'cover' }} />
             )}
-            {/* Overlay gradient */}
-            <div style={{ position: 'absolute', inset: 0, background: 'linear-gradient(to right, rgba(0,0,0,0.6) 0%, rgba(0,0,0,0.1) 60%, transparent 100%)' }} />
+            {/* Refined overlay — darker on the text (inline-start) side */}
+            <div style={{ position: 'absolute', inset: 0, background: isRtl
+              ? 'linear-gradient(to left, rgba(20,16,18,0.62) 0%, rgba(20,16,18,0.18) 55%, transparent 100%)'
+              : 'linear-gradient(to right, rgba(20,16,18,0.62) 0%, rgba(20,16,18,0.18) 55%, transparent 100%)' }} />
 
             {/* Text Content */}
             {(pick(a,'title',lang) || pick(a,'subtitle',lang)) && (
               <div style={{
-                position: 'absolute', left: 'clamp(1.5rem, 5%, 5rem)', top: '50%', transform: 'translateY(-50%)',
-                color: '#fff', maxWidth: '500px'
+                position: 'absolute', insetInlineStart: 'clamp(1.5rem, 6%, 6rem)', top: '50%', transform: 'translateY(-50%)',
+                color: '#fff', maxWidth: '540px', textAlign: isRtl ? 'right' : 'left'
               }}>
                 {pick(a,'badge',lang) && (
-                  <span style={{ display: 'inline-block', background: 'var(--accent-color)', color: '#fff', padding: '4px 14px', fontSize: '0.7rem', letterSpacing: '0.15em', textTransform: 'uppercase', fontWeight: 700, marginBottom: '1rem' }}>
+                  <span style={{ display: 'inline-block', background: 'rgba(255,255,255,0.16)', backdropFilter: 'blur(6px)', WebkitBackdropFilter: 'blur(6px)', border: '1px solid rgba(255,255,255,0.35)', color: '#fff', padding: '5px 16px', fontSize: '0.72rem', letterSpacing: '0.12em', textTransform: 'uppercase', fontWeight: 700, marginBottom: '1.1rem', borderRadius: '999px' }}>
                     {pick(a,'badge',lang)}
                   </span>
                 )}
                 {pick(a,'title',lang) && (
-                  <h2 style={{ fontSize: 'clamp(1.4rem, 3.5vw, 2.8rem)', fontWeight: 700, margin: '0 0 0.5rem', lineHeight: 1.2, textTransform: 'uppercase', letterSpacing: '0.03em' }}>
+                  <h2 style={{ fontFamily: 'var(--font-display)', fontSize: 'clamp(1.7rem, 4vw, 3.1rem)', fontWeight: 700, margin: '0 0 0.6rem', lineHeight: 1.15, textShadow: '0 2px 18px rgba(0,0,0,0.4)' }}>
                     {pick(a,'title',lang)}
                   </h2>
                 )}
                 {pick(a,'subtitle',lang) && (
-                  <p style={{ fontSize: 'clamp(0.9rem, 1.5vw, 1.15rem)', opacity: 0.9, margin: '0 0 1.5rem', lineHeight: 1.5 }}>
+                  <p style={{ fontSize: 'clamp(0.92rem, 1.5vw, 1.18rem)', opacity: 0.95, margin: '0 0 1.6rem', lineHeight: 1.55, textShadow: '0 1px 10px rgba(0,0,0,0.35)' }}>
                     {pick(a,'subtitle',lang)}
                   </p>
                 )}
@@ -98,26 +101,26 @@ export default function AdsBanner() {
             )}
           </div>
         ))}
-      </div>
 
-      {/* Dots */}
-      {ads.length > 1 && (
-        <div style={{ position: 'absolute', bottom: '1rem', left: '50%', transform: 'translateX(-50%)', display: 'flex', gap: '6px', zIndex: 10 }}>
-          {ads.map((_, idx) => (
-            <button
-              key={idx}
-              onClick={() => setCurrent(idx)}
-              style={{
-                width: idx === current ? '24px' : '8px', height: '8px',
-                borderRadius: '4px', border: 'none', padding: 0, cursor: 'pointer',
-                background: idx === current ? '#fff' : 'rgba(255,255,255,0.5)',
-                transition: 'all 0.4s ease'
-              }}
-              aria-label={`Go to ad ${idx + 1}`}
-            />
-          ))}
-        </div>
-      )}
+        {/* Dots */}
+        {ads.length > 1 && (
+          <div style={{ position: 'absolute', bottom: '1rem', left: '50%', transform: 'translateX(-50%)', display: 'flex', gap: '6px', zIndex: 10 }}>
+            {ads.map((_, idx) => (
+              <button
+                key={idx}
+                onClick={() => setCurrent(idx)}
+                style={{
+                  width: idx === current ? '26px' : '9px', height: '9px',
+                  borderRadius: '999px', border: 'none', padding: 0, cursor: 'pointer',
+                  background: idx === current ? '#fff' : 'rgba(255,255,255,0.55)',
+                  transition: 'all 0.4s ease'
+                }}
+                aria-label={`Go to ad ${idx + 1}`}
+              />
+            ))}
+          </div>
+        )}
+      </div>
     </section>
   );
 }

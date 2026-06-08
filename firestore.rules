@@ -82,16 +82,31 @@ service cloud.firestore {
       allow create: if false;
 
       // Admins and couriers can read all orders (couriers need the delivery
-      // list). Customers can only read their own orders.
+      // list). Customers can read orders tied to their uid, or carrying their
+      // own verified email (so guest/pre-signup orders also appear in profile).
       allow read: if isAdmin()
                   || isCourier()
-                  || (request.auth != null && resource.data.uid == request.auth.uid);
+                  || (request.auth != null && resource.data.uid == request.auth.uid)
+                  || (request.auth != null
+                      && request.auth.token.email_verified == true
+                      && resource.data.customerInfo.email == request.auth.token.email);
 
       // Admins can update any field; couriers may only change the status.
       allow update: if isAdmin()
                     || (isCourier()
                         && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status']));
       allow delete: if isAdmin();
+    }
+
+    // Geocode cache — written/read only server-side via the Admin SDK (which
+    // bypasses these rules). No client access.
+    match /geocache/{document=**} {
+      allow read, write: if false;
+    }
+
+    // Invoice counter — sequential numbering, allocated server-side only.
+    match /counters/{document=**} {
+      allow read, write: if false;
     }
 
     // Stock movements & purchase orders — staff only (written via Admin SDK or admin)
@@ -107,6 +122,34 @@ service cloud.firestore {
       allow read: if true;
       allow create: if false;
       allow update, delete: if isAdmin();
+    }
+
+    // Back-in-stock requests — public create (like newsletter); read/manage by
+    // admin. The notifying cron uses the Admin SDK (bypasses rules).
+    match /restock_requests/{document=**} {
+      allow create: if true;
+      allow read, update, delete: if isAdmin();
+    }
+
+    // Return/refund requests — a logged-in customer may create one for their own
+    // account and read their own; staff manage all.
+    match /return_requests/{docId} {
+      allow create: if request.auth != null && request.resource.data.uid == request.auth.uid;
+      allow read: if isAdmin() || (request.auth != null && resource.data.uid == request.auth.uid);
+      allow update, delete: if isAdmin();
+    }
+
+    // Abandoned carts — a customer's own cart snapshot (keyed by uid). The
+    // recovery cron reads them via the Admin SDK.
+    match /abandoned_carts/{userId} {
+      allow read, write: if isOwner(userId);
+    }
+
+    // Account-deletion requests (privacy law) — a customer files their own;
+    // staff process and purge. Keyed by uid.
+    match /deletion_requests/{userId} {
+      allow create, read: if isOwner(userId);
+      allow read, update, delete: if isAdmin();
     }
 
     // Newsletter & Support Tickets — Public create, admin manage

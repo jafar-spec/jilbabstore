@@ -1,4 +1,5 @@
 import './globals.css'
+import { Cairo, El_Messiri, Playfair_Display } from 'next/font/google'
 import { CartProvider } from '@/context/CartContext'
 import { ToastProvider } from '@/context/ToastContext'
 import { LanguageProvider } from '@/context/LanguageContext'
@@ -9,7 +10,19 @@ import Analytics from '@/components/Analytics'
 import CookieConsent from '@/components/CookieConsent'
 import AccessibilityWidget from '@/components/AccessibilityWidget'
 import NewsletterPopup from '@/components/NewsletterPopup'
+import WhatsAppButton from '@/components/WhatsAppButton'
+import ServiceWorkerRegister from '@/components/ServiceWorkerRegister'
+import StructuredData from '@/components/StructuredData'
 import { Suspense } from 'react'
+
+// Self-hosted fonts (no render-blocking Google Fonts request; swap to avoid FOIT)
+const cairo = Cairo({ subsets: ['arabic', 'latin'], weight: ['400', '500', '600', '700'], variable: '--font-cairo', display: 'swap' })
+const elMessiri = El_Messiri({ subsets: ['arabic', 'latin'], weight: ['500', '600', '700'], variable: '--font-elmessiri', display: 'swap' })
+const playfair = Playfair_Display({ subsets: ['latin'], weight: ['600', '700'], variable: '--font-playfair', display: 'swap' })
+
+export const viewport = {
+  themeColor: '#141414',
+}
 
 export const metadata = {
   metadataBase: new URL('https://jilbab.store'),
@@ -32,16 +45,19 @@ export const metadata = {
     images: ['/assets/logo.png'],
   },
   twitter: { card: 'summary_large_image' },
+  appleWebApp: { capable: true, statusBarStyle: 'default', title: 'Jilbab Store' },
 }
 
 export default function RootLayout({ children }) {
   // Note: dir="rtl" and lang="ar" will be dynamically overridden by LanguageProvider on the client
   return (
-    <html lang="ar" dir="rtl">
+    <html lang="ar" dir="rtl" className={`${cairo.variable} ${elMessiri.variable} ${playfair.variable}`}>
       <head>
+        <link rel="preconnect" href="https://cdnjs.cloudflare.com" crossOrigin="anonymous" />
         <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" />
       </head>
       <body>
+        <StructuredData />
         <a href="#main-content" className="skip-link">تخطّ إلى المحتوى</a>
         <Suspense fallback={null}>
           <Analytics />
@@ -58,7 +74,9 @@ export default function RootLayout({ children }) {
                   </ClientWrapper>
                   <CookieConsent />
                   <AccessibilityWidget />
+                  <WhatsAppButton />
                   <NewsletterPopup />
+                  <ServiceWorkerRegister />
                 </WishlistProvider>
               </CartProvider>
             </ToastProvider>

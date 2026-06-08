@@ -49,3 +49,22 @@ functions/node_modules/
 /playwright-report
 /blob-report
 /playwright/.cache
+
+# ─── SECRETS — never commit (this repo is PUBLIC) ───────────────────────────
+# Firebase Admin / service-account private keys (grant full DB access)
+*adminsdk*.json
+*serviceAccount*.json
+*service-account*.json
+# Local scratch folder that holds the service-account key + data dumps
+Jilbab Store misc/
+# 2FA / recovery codes and data exports
+*recovery*.txt
+twilio_2FA_recovery_code.txt
+jilbabstore-data-*.json
+.DS_Store
+
+# Large marketing assets (not needed for the app build/deploy)
+grand-opening/
+
+# Allow a committed, value-less env template (overrides the .env* rule above)
+!.env.example

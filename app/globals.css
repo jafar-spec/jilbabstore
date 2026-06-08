@@ -1,41 +1,50 @@
-@import url('https://fonts.googleapis.com/css2?family=Cairo:wght@300;400;500;600;700&family=Playfair+Display:ital,wght@0,400;0,500;0,600;0,700;1,400&display=swap');
-
 :root {
-  /* Clean Retail E-Commerce Theme (Delta Aesthetic) */
-  --bg-color: #ffffff; /* Pure white background */
-  --surface-color: #f7f7f7; /* Light grey for secondary surfaces */
-  --surface-hover: #eeeeee;
-  --text-primary: #000000; /* Pure black */
-  --text-secondary: #4a4a4a; /* Medium dark grey */
-  --accent-color: #000000; /* Black as the primary accent */
-  --accent-hover: #333333;
-  
-  /* Minimal Flat Borders */
-  --border-color: #e6e6e6;
-  --glass-bg: rgba(255, 255, 255, 0.98);
-  --glass-border: #e6e6e6;
-  --glass-shadow: 0 2px 10px rgba(0, 0, 0, 0.05);
-  
-  /* Typography */
-  --font-sans: 'Cairo', -apple-system, sans-serif;
-  --font-serif: var(--font-sans); /* Remove serif entirely */
-  
+  /* Monochrome Glassmorphism (black & white, heavy frost) */
+  --bg-color: #f1f1f3; /* Soft light grey so frosted glass has something to refract */
+  --surface-color: rgba(255, 255, 255, 0.55); /* Frosted glass tint (site-wide) */
+  --surface-solid: #e8e8ea; /* Opaque light grey for image placeholders */
+  --surface-hover: rgba(255, 255, 255, 0.82);
+  --text-primary: #0f0f10; /* Near-black ink */
+  --text-secondary: #5b5b5e; /* Mid grey */
+  --ink: #0f0f10;
+  --accent-color: #141414; /* Black accent */
+  --accent-hover: #000000;
+  --accent-soft: rgba(0, 0, 0, 0.06);
+  --blush: #e8e8ea; /* Light grey for soft fills (announcement bar) */
+
+  /* Frosted glass system — heavier frost */
+  --border-color: rgba(0, 0, 0, 0.12);
+  --glass-bg: rgba(255, 255, 255, 0.55);      /* navbar / chrome */
+  --glass-panel: rgba(255, 255, 255, 0.40);   /* cards / tiles */
+  --glass-strong: rgba(255, 255, 255, 0.64);  /* drawers / modals */
+  --glass-blur: blur(24px) saturate(135%);
+  --glass-border: rgba(255, 255, 255, 0.65);
+  --glass-shadow: 0 10px 34px rgba(0, 0, 0, 0.10);
+
+  /* Typography (self-hosted via next/font; CSS variables set on <html>) */
+  --font-sans: var(--font-cairo), -apple-system, sans-serif;
+  --font-serif: var(--font-sans);
+  /* Elegant display stack: Playfair for Latin, El Messiri for Arabic glyphs,
+     Cairo as the final fallback. */
+  --font-display: var(--font-playfair), var(--font-elmessiri), var(--font-cairo), sans-serif;
+
   /* High-Performance Transitions & Custom Easing */
   --transition: all 0.4s cubic-bezier(0.16, 1, 0.3, 1);
   --ease-out-expo: cubic-bezier(0.16, 1, 0.3, 1);
   --ease-out-back: cubic-bezier(0.34, 1.56, 0.64, 1);
-  
-  /* Sophisticated Soft Shadow Palette */
-  --shadow-sm: 0 2px 8px rgba(44, 43, 41, 0.03);
-  --shadow-md: 0 8px 24px rgba(44, 43, 41, 0.06);
-  --shadow-lg: 0 16px 40px rgba(44, 43, 41, 0.1);
-  --shadow-inset: inset 0 2px 4px rgba(44, 43, 41, 0.04);
-  
+
+  /* Warm, layered shadow palette */
+  --shadow-sm: 0 2px 10px rgba(90, 60, 70, 0.05);
+  --shadow-md: 0 10px 30px rgba(90, 60, 70, 0.08);
+  --shadow-lg: 0 22px 50px rgba(90, 60, 70, 0.13);
+  --shadow-inset: inset 0 2px 4px rgba(90, 60, 70, 0.05);
+
   /* Modern Layout Corner Radii */
-  --radius-sm: 4px;
-  --radius-md: 8px;
-  --radius-lg: 16px;
-  --radius-xl: 24px;
+  --radius-sm: 6px;
+  --radius-md: 10px;
+  --radius-lg: 18px;
+  --radius-xl: 26px;
+  --radius-img: 14px;
   --radius-full: 9999px;
 }
 
@@ -48,6 +57,12 @@
 body {
   font-family: var(--font-sans);
   background-color: var(--bg-color);
+  /* Soft warm tonal blobs give the frosted glass something to refract */
+  background-image:
+    radial-gradient(38rem 38rem at 10% 6%, rgba(0, 0, 0, 0.06), transparent 60%),
+    radial-gradient(34rem 34rem at 92% 16%, rgba(0, 0, 0, 0.05), transparent 60%),
+    radial-gradient(44rem 44rem at 72% 96%, rgba(0, 0, 0, 0.06), transparent 60%);
+  background-attachment: fixed;
   color: var(--text-primary);
   line-height: 1.65;
   overflow-x: hidden;
@@ -76,9 +91,9 @@ body {
    Typography & Base
    ========================================================================== */
 h1, h2, h3, h4, h5, h6 {
-  font-family: var(--font-sans);
+  font-family: var(--font-display);
   font-weight: 600;
-  letter-spacing: 0.02em;
+  letter-spacing: 0.01em;
 }
 
 a {
@@ -94,13 +109,12 @@ button {
 
 .section-title {
   text-align: center;
-  font-size: 2rem;
+  font-size: 2.3rem;
   font-weight: 700;
   margin-bottom: 2.5rem;
-  text-transform: uppercase;
-  letter-spacing: 0.05em;
+  letter-spacing: 0.02em;
   color: var(--text-primary);
-  font-family: var(--font-sans);
+  font-family: var(--font-display);
 }
 
 /* ==========================================================================
@@ -263,7 +277,7 @@ button {
   display: flex;
   align-items: center;
   justify-content: center;
-  box-shadow: 0 2px 8px rgba(182, 95, 74, 0.4);
+  box-shadow: 0 2px 8px rgba(138, 91, 110, 0.45);
   animation: cartPulse 0.5s var(--ease-out-back);
 }
 
@@ -322,7 +336,7 @@ button {
   width: 100%;
   aspect-ratio: 3/4;
   overflow: hidden;
-  background: var(--surface-color);
+  background: var(--surface-solid);
   border-radius: 0;
   margin-bottom: 1rem;
 }
@@ -782,7 +796,7 @@ button {
 
 .admin-input:focus, input[type="text"]:focus, input[type="email"]:focus, input[type="tel"]:focus, select:focus, textarea:focus {
   border-color: var(--accent-color) !important;
-  box-shadow: 0 0 0 3px rgba(182, 95, 74, 0.18) !important;
+  box-shadow: 0 0 0 3px var(--accent-soft) !important;
 }
 
 /* ==========================================================================
@@ -1149,8 +1163,8 @@ button {
    Customer Service Widget
    ========================================================================== */
 @keyframes cs-pulse {
-  0%, 100% { box-shadow: 0 4px 24px rgba(124,58,237,0.45); }
-  50% { box-shadow: 0 4px 32px rgba(124,58,237,0.75), 0 0 0 6px rgba(124,58,237,0.12); }
+  0%, 100% { box-shadow: 0 4px 24px rgba(0,0,0,0.30); }
+  50% { box-shadow: 0 4px 32px rgba(0,0,0,0.45), 0 0 0 6px rgba(0,0,0,0.10); }
 }
 
 @media (max-width: 480px) {
@@ -1245,4 +1259,297 @@ html.a11y-reduce-motion *::after {
   animation-iteration-count: 1 !important;
   transition-duration: 0.001ms !important;
   scroll-behavior: auto !important;
+}
+
+/* ==========================================================================
+   FACELIFT — Warm Editorial Luxe (visual layer only; no markup/logic changes)
+   ========================================================================== */
+
+/* Glassy, refined navbar that floats over content */
+.navbar {
+  background: var(--glass-bg);
+  backdrop-filter: saturate(180%) blur(14px);
+  -webkit-backdrop-filter: saturate(180%) blur(14px);
+  border-bottom: 1px solid var(--glass-border);
+}
+.logo { font-family: var(--font-display); }
+
+/* Product cards — softer, more tactile, with gentle lift + image zoom */
+.product-image-container {
+  border-radius: var(--radius-img);
+  box-shadow: var(--shadow-sm);
+}
+.product-card { transition: transform 0.45s var(--ease-out-expo); }
+.product-card:hover { transform: translateY(-6px); }
+.product-card:hover .product-image-container { box-shadow: var(--shadow-md); }
+.product-title { font-weight: 600; letter-spacing: 0; }
+.product-price { color: var(--text-primary); font-weight: 700; }
+
+/* Card badges (new / sold-out) */
+.card-badge {
+  display: inline-block;
+  padding: 4px 11px;
+  border-radius: var(--radius-full);
+  font-size: 0.64rem;
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+}
+.card-badge--new { background: var(--text-primary); color: #fff; }
+.card-badge--out { background: rgba(28, 26, 25, 0.72); color: #fff; backdrop-filter: blur(4px); }
+
+/* Second image fades in on hover (editorial product swap) */
+.product-image .img-hover {
+  opacity: 0;
+  transition: opacity 0.6s var(--ease-out-expo);
+}
+.product-card:hover .product-image .img-hover { opacity: 1; }
+
+/* Refined wishlist heart on cards */
+.wish-btn {
+  position: absolute;
+  top: 10px;
+  inset-inline-end: 10px;
+  background: rgba(255, 255, 255, 0.9);
+  backdrop-filter: blur(6px);
+  border: none;
+  border-radius: var(--radius-full);
+  width: 38px; height: 38px;
+  display: flex; align-items: center; justify-content: center;
+  cursor: pointer;
+  box-shadow: var(--shadow-sm);
+  z-index: 10;
+  transition: transform 0.25s var(--ease-out-back), background 0.25s ease;
+}
+.wish-btn:hover { transform: scale(1.08); background: #fff; }
+
+/* Product page: sticky mobile add-to-cart bar */
+.pdp-sticky, .pdp-sticky-spacer { display: none; }
+@media (max-width: 768px) {
+  .pdp-sticky {
+    display: flex;
+    position: fixed;
+    left: 0; right: 0; bottom: 0;
+    z-index: 1500;
+    background: var(--glass-bg);
+    backdrop-filter: saturate(180%) blur(14px);
+    -webkit-backdrop-filter: saturate(180%) blur(14px);
+    border-top: 1px solid var(--glass-border);
+    padding: 0.7rem 1rem;
+    align-items: center;
+    gap: 1rem;
+    box-shadow: 0 -6px 22px rgba(90, 60, 70, 0.10);
+  }
+  .pdp-sticky .pdp-price { font-weight: 800; font-size: 1.1rem; white-space: nowrap; }
+  .pdp-sticky .btn-primary { flex: 1; margin: 0; padding: 0.85rem 1rem; }
+  .pdp-sticky-spacer { display: block; height: 76px; }
+}
+
+/* Hero floating offer card */
+.hero-offer { transition: transform 0.35s var(--ease-out-expo), background 0.3s ease; }
+.hero-offer:hover { transform: translateY(-3px); background: rgba(255, 255, 255, 0.22) !important; }
+.hero-offer i { transition: transform 0.3s var(--ease-out-expo); }
+.hero-offer:hover i { transform: translateX(-4px); }
+/* On phones the offer card is the focal element — auto-rotation keeps slides moving */
+@media (max-width: 768px) { .hero-dots { display: none !important; } }
+
+/* ---- Mobile performance: trim expensive backdrop-blur ----
+   Dozens of blurred product tiles + a fixed background are costly on low-end
+   phones. Keep the translucent glass look, but drop per-card blur and the
+   fixed-attachment repaint on small screens; chrome (navbar/cart/modals)
+   keeps its blur. */
+@media (max-width: 768px) {
+  body { background-attachment: scroll; }
+  .product-card { backdrop-filter: none; -webkit-backdrop-filter: none; background: rgba(255, 255, 255, 0.72); }
+  :root { --glass-blur: blur(14px) saturate(130%); }
+}
+
+/* ==========================================================================
+   GLASSMORPHISM THEME (frosted panels over the linen base)
+   ========================================================================== */
+.products { background: transparent; }
+
+/* Product tiles — frosted glass, image-forward (image fills the tile edge-to-edge) */
+.product-card {
+  background: var(--glass-panel);
+  -webkit-backdrop-filter: var(--glass-blur);
+  backdrop-filter: var(--glass-blur);
+  border: 1px solid var(--glass-border);
+  border-radius: var(--radius-lg);
+  padding: 0;
+  overflow: hidden;
+  box-shadow: var(--glass-shadow);
+}
+.product-card .product-image-container { margin-bottom: 0; box-shadow: none; border-radius: 0; }
+.product-card .product-info { padding: 0.85rem 0.95rem 1rem; }
+
+/* Action overlays the bottom of the image; auto-hidden until hover on desktop */
+.card-actions { position: absolute; left: 8px; right: 8px; bottom: 8px; z-index: 8; }
+.card-actions .add-to-cart {
+  margin: 0;
+  background: var(--glass-strong);
+  -webkit-backdrop-filter: blur(8px); backdrop-filter: blur(8px);
+  border-color: rgba(255,255,255,0.6);
+  color: var(--text-primary);
+  box-shadow: 0 4px 16px rgba(0,0,0,0.18);
+}
+@media (hover: hover) and (min-width: 769px) {
+  .card-actions { opacity: 0; transform: translateY(10px); transition: opacity 0.3s var(--ease-out-expo), transform 0.3s var(--ease-out-expo); }
+  .product-card:hover .card-actions { opacity: 1; transform: translateY(0); }
+}
+/* On phones/tablets the action is always visible (no hover) */
+@media (max-width: 768px) { .card-actions { opacity: 1 !important; transform: none !important; } }
+
+/* Larger product imagery on desktop (fewer, bigger cards) */
+@media (min-width: 769px) {
+  .product-grid { grid-template-columns: repeat(auto-fit, minmax(320px, 460px)); gap: 2.5rem 2rem; }
+}
+
+/* Drawers, modals, dashboards — frosted */
+.cart-sidebar {
+  background: var(--glass-strong) !important;
+  -webkit-backdrop-filter: var(--glass-blur);
+  backdrop-filter: var(--glass-blur);
+}
+.cart-footer { background: rgba(255, 252, 247, 0.45); }
+.modal-content {
+  background: var(--glass-strong);
+  -webkit-backdrop-filter: var(--glass-blur);
+  backdrop-filter: var(--glass-blur);
+}
+.courier-card {
+  background: var(--glass-panel) !important;
+  -webkit-backdrop-filter: var(--glass-blur);
+  backdrop-filter: var(--glass-blur);
+}
+
+/* Footer sits on a faint frosted panel */
+footer { backdrop-filter: var(--glass-blur); -webkit-backdrop-filter: var(--glass-blur); }
+
+/* Sticky category quick-jump bar */
+.category-bar {
+  position: sticky;
+  z-index: 90;
+  background: var(--glass-bg);
+  -webkit-backdrop-filter: var(--glass-blur);
+  backdrop-filter: var(--glass-blur);
+  border-bottom: 1px solid var(--glass-border);
+}
+.category-bar-inner {
+  max-width: 1200px;
+  margin: 0 auto;
+  display: flex;
+  gap: 0.5rem;
+  padding: 0.6rem 4%;
+  overflow-x: auto;
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+.category-bar-inner::-webkit-scrollbar { display: none; }
+.cat-chip {
+  flex: 0 0 auto;
+  padding: 0.5rem 1.3rem;
+  border-radius: var(--radius-full);
+  border: 1px solid var(--border-color);
+  background: transparent;
+  color: var(--text-secondary);
+  font-weight: 600;
+  font-size: 0.9rem;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: all 0.25s var(--ease-out-expo);
+}
+.cat-chip:hover { color: var(--text-primary); border-color: var(--text-primary); }
+.cat-chip.active {
+  background: var(--text-primary);
+  color: var(--bg-color);
+  border-color: var(--text-primary);
+}
+
+/* ===== /shop browser ===== */
+.shop-chiprow { display: flex; gap: 0.5rem; overflow-x: auto; padding-bottom: 4px; scrollbar-width: none; }
+.shop-chiprow::-webkit-scrollbar { display: none; }
+.shop-layout { display: flex; gap: 2rem; align-items: flex-start; }
+.shop-sidebar {
+  flex: 0 0 240px;
+  position: sticky; top: 130px;
+  background: var(--glass-panel);
+  -webkit-backdrop-filter: var(--glass-blur); backdrop-filter: var(--glass-blur);
+  border: 1px solid var(--glass-border);
+  border-radius: var(--radius-lg);
+  padding: 1.25rem;
+}
+.shop-facet-h { font-weight: 700; font-size: 0.92rem; margin-bottom: 0.6rem; }
+.shop-pill {
+  padding: 0.4rem 0.9rem; border-radius: var(--radius-full); border: 1px solid var(--border-color);
+  background: transparent; color: var(--text-secondary); font-size: 0.82rem; cursor: pointer; transition: all 0.2s;
+}
+.shop-pill:hover { color: var(--text-primary); border-color: var(--text-primary); }
+.shop-pill.on { background: var(--text-primary); color: var(--bg-color); border-color: var(--text-primary); }
+.shop-filter-btn {
+  display: none; align-items: center; gap: 8px; padding: 0.6rem 1.1rem; border-radius: var(--radius-full);
+  border: 1px solid var(--border-color); background: var(--surface-color); color: var(--text-primary); cursor: pointer; font-weight: 600; font-size: 0.88rem;
+}
+.shop-skeleton { width: 100%; aspect-ratio: 3/4; border-radius: var(--radius-lg); background: linear-gradient(100deg, var(--surface-solid) 30%, rgba(0,0,0,0.04) 50%, var(--surface-solid) 70%); background-size: 200% 100%; animation: shopShimmer 1.3s infinite; }
+@keyframes shopShimmer { from { background-position: 200% 0; } to { background-position: -200% 0; } }
+.shop-grid-fade { animation: shopFade 0.4s var(--ease-out-expo); }
+@keyframes shopFade { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: translateY(0); } }
+
+@media (max-width: 860px) {
+  .shop-sidebar { display: none; }
+  .shop-filter-btn { display: inline-flex; }
+}
+
+/* Pill primary CTAs read more premium */
+.btn-primary, .checkout-btn {
+  border-radius: var(--radius-full);
+  letter-spacing: 0.06em;
+  box-shadow: var(--shadow-sm);
+}
+.btn-primary:hover, .checkout-btn:hover { box-shadow: var(--shadow-md); }
+.btn-primary:active, .checkout-btn:active { transform: translateY(1px); }
+.add-to-cart { border-radius: var(--radius-full); }
+
+/* Cart drawer + modal corners follow the softer radius scale */
+.cart-item img { border-radius: var(--radius-md); }
+
+/* Section eyebrow accent under titles */
+.section-title { position: relative; }
+.section-title::after {
+  content: '';
+  display: block;
+  width: 56px;
+  height: 3px;
+  margin: 0.85rem auto 0;
+  border-radius: var(--radius-full);
+  background: var(--accent-color);
+  opacity: 0.85;
+}
+
+/* ---- Mobile experience: 2-up product grid, tighter rhythm, bigger taps ---- */
+@media (max-width: 768px) {
+  .products { padding: 2.75rem 4% 3.5rem; }
+  .product-grid {
+    grid-template-columns: repeat(2, 1fr);
+    gap: 1.9rem 0.9rem;
+  }
+  .product-image-container { margin-bottom: 0.7rem; }
+  .product-title { font-size: 0.95rem; line-height: 1.3; }
+  .product-price { font-size: 0.95rem; }
+  .add-to-cart {
+    padding: 0.7rem 0.4rem;
+    font-size: 0.7rem;
+    letter-spacing: 0.04em;
+    margin-top: 0.7rem;
+  }
+  .section-title { font-size: 1.7rem; margin-bottom: 1.75rem; }
+  .navbar { height: 64px; }
+  .navbar-actions button,
+  .navbar-actions a { min-width: 40px; min-height: 40px; }
+  .cart-header, .cart-footer, .cart-items { padding: 1.25rem 1.1rem; }
+}
+
+@media (max-width: 380px) {
+  .product-grid { gap: 1.4rem 0.7rem; }
+  .add-to-cart { font-size: 0.64rem; padding: 0.6rem 0.3rem; }
 }

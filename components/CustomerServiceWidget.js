@@ -90,17 +90,17 @@ export default function CustomerServiceWidget() {
           position: 'fixed', bottom: '2rem', right: '1.5rem', zIndex: 1100,
           height: '52px',
           borderRadius: '99px',
-          background: 'linear-gradient(135deg, #7c3aed, #a855f7)',
+          background: 'linear-gradient(135deg, #1a1a1a, #4a4a4a)',
           border: 'none', cursor: 'pointer', color: '#fff',
-          boxShadow: '0 4px 24px rgba(124,58,237,0.45)',
+          boxShadow: '0 4px 24px rgba(0,0,0,0.30)',
           display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px',
           padding: '0 20px',
           fontSize: '0.88rem', fontWeight: 700, letterSpacing: '0.03em',
           transition: 'transform 0.3s, box-shadow 0.3s',
           animation: 'cs-pulse 3s ease-in-out infinite'
         }}
-        onMouseEnter={e => { e.currentTarget.style.transform = 'scale(1.05)'; e.currentTarget.style.boxShadow = '0 6px 32px rgba(124,58,237,0.6)'; }}
-        onMouseLeave={e => { e.currentTarget.style.transform = 'scale(1)'; e.currentTarget.style.boxShadow = '0 4px 24px rgba(124,58,237,0.45)'; }}
+        onMouseEnter={e => { e.currentTarget.style.transform = 'scale(1.05)'; e.currentTarget.style.boxShadow = '0 6px 32px rgba(0,0,0,0.42)'; }}
+        onMouseLeave={e => { e.currentTarget.style.transform = 'scale(1)'; e.currentTarget.style.boxShadow = '0 4px 24px rgba(0,0,0,0.30)'; }}
         aria-label="Open Customer Service"
       >
         <i className="fa-solid fa-headset" style={{ fontSize: '1.1rem' }}></i>
@@ -124,7 +124,7 @@ export default function CustomerServiceWidget() {
           }}>
             {/* Header */}
             <div style={{
-              background: 'linear-gradient(135deg, var(--accent-color), #8b5cf6)',
+              background: 'linear-gradient(135deg, #1a1a1a, #4a4a4a)',
               padding: '1.5rem 2rem', borderRadius: '16px 16px 0 0',
               display: 'flex', alignItems: 'center', justifyContent: 'space-between'
             }}>
@@ -261,7 +261,7 @@ export default function CustomerServiceWidget() {
                     type="submit" disabled={submitting}
                     style={{
                       padding: '0.9rem', borderRadius: '10px', border: 'none', cursor: 'pointer',
-                      background: 'linear-gradient(135deg, var(--accent-color), #8b5cf6)',
+                      background: 'linear-gradient(135deg, #1a1a1a, #4a4a4a)',
                       color: '#fff', fontWeight: 700, fontSize: '1rem', letterSpacing: '0.05em',
                       transition: 'opacity 0.3s', opacity: submitting ? 0.7 : 1
                     }}
@@ -280,7 +280,7 @@ export default function CustomerServiceWidget() {
                     Your support request has been received. Save your token to track your ticket status.
                   </p>
                   <div style={{
-                    background: 'linear-gradient(135deg, var(--accent-color)22, #8b5cf622)',
+                    background: 'linear-gradient(135deg, rgba(0,0,0,0.13), rgba(0,0,0,0.06))',
                     border: '2px solid var(--accent-color)',
                     borderRadius: '12px', padding: '1.5rem', marginBottom: '1.5rem'
                   }}>

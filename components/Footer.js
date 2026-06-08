@@ -56,8 +56,10 @@ export default function Footer() {
   const hasSocials = Object.values(socials).some(v => v);
 
   return (
-    <footer id="about" style={{ background: 'var(--surface-color)', color: 'var(--text-primary)', padding: '6rem 5% 3rem', marginTop: '6rem', borderTop: '1px solid var(--border-color)' }}>
-      <div style={{ maxWidth: '1200px', margin: '0 auto', display: 'flex', flexWrap: 'wrap', gap: '4rem', justifyContent: 'space-between' }}>
+    <footer id="about" style={{ position: 'relative', overflow: 'hidden', background: 'rgba(255,252,247,0.42)', color: 'var(--text-primary)', padding: '6rem 5% 3rem', marginTop: '6rem', borderTop: '1px solid var(--border-color)' }}>
+      {/* Faint brand motif (ties the design back to the logo) */}
+      <img src="/assets/logo.png" alt="" aria-hidden="true" style={{ position: 'absolute', insetInlineEnd: '-30px', bottom: '-30px', width: '300px', maxWidth: '42%', opacity: 0.06, pointerEvents: 'none', mixBlendMode: 'multiply' }} />
+      <div style={{ position: 'relative', zIndex: 1, maxWidth: '1200px', margin: '0 auto', display: 'flex', flexWrap: 'wrap', gap: '4rem', justifyContent: 'space-between' }}>
         
         {/* Brand Column */}
         <div style={{ flex: '1 1 260px' }}>
@@ -97,6 +99,8 @@ export default function Footer() {
             <li><Link href="/privacy" style={{ color: 'var(--text-secondary)', textDecoration: 'none', fontSize: '0.95rem', transition: 'var(--transition)' }}>{t('privacyPolicy')}</Link></li>
             <li><Link href="/returns" style={{ color: 'var(--text-secondary)', textDecoration: 'none', fontSize: '0.95rem', transition: 'var(--transition)' }}>{t('returnPolicy')}</Link></li>
             <li><Link href="/terms" style={{ color: 'var(--text-secondary)', textDecoration: 'none', fontSize: '0.95rem', transition: 'var(--transition)' }}>الشروط والأحكام</Link></li>
+            <li><Link href="/sizeguide" style={{ color: 'var(--text-secondary)', textDecoration: 'none', fontSize: '0.95rem', transition: 'var(--transition)' }}>دليل المقاسات</Link></li>
+            <li><Link href="/accessibility" style={{ color: 'var(--text-secondary)', textDecoration: 'none', fontSize: '0.95rem', transition: 'var(--transition)' }}>إمكانية الوصول</Link></li>
           </ul>
         </div>
 
