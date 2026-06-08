@@ -26,6 +26,13 @@ Build command is `npm run build` (see `vercel.json`).
 - **Production domain:** `https://jilbab.store`
 - **Firebase project:** `jilbab-store`
 
+> ⚠️ **Two Vercel projects are connected to this repo:** `jilbabstore` **and**
+> `jilbabstore-464d`. Both build & deploy on every push (confirmed via PR #1).
+> This is almost certainly an accidental duplicate. Decide which one owns the
+> `jilbab.store` domain and **delete/disconnect the other** to avoid double builds
+> and confusion (Vercel → the redundant project → Settings → Delete). Until then,
+> make sure env vars are set on **whichever project serves production**.
+
 > The repo also still contains a legacy Firebase App Hosting deploy script
 > (`npm run deploy` in `package.json`). **Ignore it** — we deploy via Vercel now.
 > It's left in place only so nothing breaks; remove it if you want to fully cut over.
