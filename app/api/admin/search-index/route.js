@@ -43,7 +43,7 @@ export async function POST(req) {
       await client.setSettings({
         indexName: ALGOLIA_INDEX,
         indexSettings: {
-          searchableAttributes: ['title', 'category', 'colors', 'sizes', 'skus', 'description'],
+          searchableAttributes: ['title', 'title_en', 'title_he', 'category', 'colors', 'sizes', 'skus', 'description', 'description_en', 'description_he'],
           attributesForFaceting: ['category', 'sectionId', 'subsectionId'],
         },
       }).catch(() => {});

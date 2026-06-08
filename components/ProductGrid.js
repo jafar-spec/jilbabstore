@@ -1,25 +1,27 @@
 "use client";
 import { useState } from 'react';
-import { useCart } from '@/context/CartContext';
 import { useScrollReveal } from '@/hooks/useScrollReveal';
 import { useLanguage } from '@/context/LanguageContext';
-import { useWishlist } from '@/context/WishlistContext';
-import Link from 'next/link';
-import Image from 'next/image';
+import ProductCard from '@/components/ProductCard';
 
 export default function ProductGrid({ title, products, subsections = [], emptyMessage, ratings = {} }) {
-  const { addToCart } = useCart();
   const { t, lang } = useLanguage();
-  const { toggleWishlist, isInWishlist } = useWishlist();
   const [activeSubsection, setActiveSubsection] = useState(null);
+  const [activeSubSub, setActiveSubSub] = useState(null);
   const [showFilters, setShowFilters] = useState(false);
   const [priceMin, setPriceMin] = useState('');
   const [priceMax, setPriceMax] = useState('');
   const [category, setCategory] = useState('');
   const [sortBy, setSortBy] = useState('date_desc'); // date_desc, price_asc, price_desc
+  const [colorFilter, setColorFilter] = useState('');
+  const [sizeFilter, setSizeFilter] = useState('');
+  const [inStockOnly, setInStockOnly] = useState(false);
 
   // Distinct categories present in the current product set (for the filter).
   const categories = [...new Set((products || []).map(p => p.category).filter(Boolean))];
+  const colorOpts = [...new Set((products || []).flatMap(p => [...(p.colors || []).map(c => c.name), ...(p.variants || []).map(v => v.color)]).filter(Boolean))];
+  const sizeOpts = [...new Set((products || []).flatMap(p => (p.variants || []).map(v => v.size)).filter(Boolean))];
+  const availOf = (p) => (p.variants || []).reduce((s, v) => s + ((Number(v.stock) || 0) - (Number(v.reserved) || 0)), 0);
 
   // Match a product to the active subsection by its subsectionId, OR — for
   // legacy products that were only tagged with a free-text `category` — by
@@ -34,9 +36,18 @@ export default function ProductGrid({ title, products, subsections = [], emptyMe
         || cat === (activeSub.name_ar || '').toLowerCase().trim();
   };
 
+  // Count products per subsection (for the chip badges).
+  const countForSub = (sub) => products.filter(p => p.subsectionId
+    ? p.subsectionId === sub.id
+    : ((p.category || '').toLowerCase().trim() === (sub.name_en || '').toLowerCase().trim()
+       || (p.category || '').toLowerCase().trim() === (sub.name_ar || '').toLowerCase().trim())).length;
+
+  const deeper = activeSub?.subs || [];
+
   let filteredProducts = activeSubsection
     ? products.filter(matchesSubsection)
     : [...products];
+  if (activeSubSub) filteredProducts = filteredProducts.filter(p => p.subSubId === activeSubSub);
 
   // Apply Price + Category Filters
   if (priceMin) {
@@ -47,6 +58,15 @@ export default function ProductGrid({ title, products, subsections = [], emptyMe
   }
   if (category) {
     filteredProducts = filteredProducts.filter(p => p.category === category);
+  }
+  if (colorFilter) {
+    filteredProducts = filteredProducts.filter(p => (p.colors || []).some(c => c.name === colorFilter) || (p.variants || []).some(v => v.color === colorFilter));
+  }
+  if (sizeFilter) {
+    filteredProducts = filteredProducts.filter(p => (p.variants || []).some(v => v.size === sizeFilter));
+  }
+  if (inStockOnly) {
+    filteredProducts = filteredProducts.filter(p => !(p.variants?.length) || availOf(p) > 0);
   }
 
   // Apply Sorting (on a copy so we never mutate the products prop)
@@ -59,7 +79,7 @@ export default function ProductGrid({ title, products, subsections = [], emptyMe
 
   // Re-reveal whenever the visible set changes, so filtered-in cards (rendered
   // after mount) don't stay stuck at opacity:0.
-  useScrollReveal([activeSubsection, category, priceMin, priceMax, sortBy, filteredProducts.length]);
+  useScrollReveal([activeSubsection, activeSubSub, category, priceMin, priceMax, sortBy, colorFilter, sizeFilter, inStockOnly, filteredProducts.length]);
 
   return (
     <section className="products">
@@ -69,7 +89,7 @@ export default function ProductGrid({ title, products, subsections = [], emptyMe
       {subsections && subsections.length > 0 && (
         <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap', justifyContent: 'center', marginBottom: '2rem', padding: '0 5%' }}>
           <button
-            onClick={() => setActiveSubsection(null)}
+            onClick={() => { setActiveSubsection(null); setActiveSubSub(null); }}
             style={{
               padding: '6px 18px', borderRadius: '99px', border: '1.5px solid var(--border-color)',
               background: activeSubsection === null ? 'var(--text-primary)' : 'transparent',
@@ -83,7 +103,7 @@ export default function ProductGrid({ title, products, subsections = [], emptyMe
           {subsections.map(sub => (
             <button
               key={sub.id}
-              onClick={() => setActiveSubsection(sub.id)}
+              onClick={() => { setActiveSubsection(sub.id); setActiveSubSub(null); }}
               style={{
                 padding: '6px 18px', borderRadius: '99px', border: '1.5px solid var(--border-color)',
                 background: activeSubsection === sub.id ? 'var(--text-primary)' : 'transparent',
@@ -93,8 +113,27 @@ export default function ProductGrid({ title, products, subsections = [], emptyMe
               }}
             >
               {lang === 'ar' ? sub.name_ar : lang === 'he' ? (sub.name_he || sub.name_en) : sub.name_en}
+              <span style={{ opacity: 0.55, marginInlineStart: '6px', fontSize: '0.78rem' }}>{countForSub(sub)}</span>
             </button>
           ))}
+        </div>
+      )}
+
+      {/* Deeper category chips — when the active sub-section has children */}
+      {activeSubsection && deeper.length > 0 && (
+        <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap', justifyContent: 'center', marginTop: '-1rem', marginBottom: '2rem', padding: '0 5%' }}>
+          <button onClick={() => setActiveSubSub(null)} style={{ padding: '5px 15px', borderRadius: '99px', border: '1px solid var(--border-color)', background: activeSubSub === null ? 'var(--text-primary)' : 'transparent', color: activeSubSub === null ? 'var(--bg-color)' : 'var(--text-secondary)', cursor: 'pointer', fontSize: '0.8rem', fontWeight: 600 }}>
+            {lang === 'ar' ? 'الكل' : lang === 'he' ? 'הכל' : 'All'}
+          </button>
+          {deeper.map(ss => {
+            const n = products.filter(p => p.subSubId === ss.id).length;
+            return (
+              <button key={ss.id} onClick={() => setActiveSubSub(activeSubSub === ss.id ? null : ss.id)} style={{ padding: '5px 15px', borderRadius: '99px', border: '1px solid var(--border-color)', background: activeSubSub === ss.id ? 'var(--text-primary)' : 'transparent', color: activeSubSub === ss.id ? 'var(--bg-color)' : 'var(--text-secondary)', cursor: 'pointer', fontSize: '0.8rem', fontWeight: 600, opacity: n === 0 ? 0.45 : 1 }}>
+                {lang === 'ar' ? ss.name_ar : lang === 'he' ? (ss.name_he || ss.name_en) : ss.name_en}
+                <span style={{ opacity: 0.55, marginInlineStart: '5px', fontSize: '0.74rem' }}>{n}</span>
+              </button>
+            );
+          })}
         </div>
       )}
 
@@ -146,6 +185,28 @@ export default function ProductGrid({ title, products, subsections = [], emptyMe
               </div>
             )}
 
+            {colorOpts.length > 0 && (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
+                <label style={{ fontSize: '0.9rem', fontWeight: 'bold', color: 'var(--text-secondary)' }}>{lang === 'he' ? 'צבע' : lang === 'en' ? 'Color' : 'اللون'}</label>
+                <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px' }}>
+                  {colorOpts.map(c => (
+                    <button key={c} type="button" onClick={() => setColorFilter(colorFilter === c ? '' : c)} className={`shop-pill${colorFilter === c ? ' on' : ''}`}>{c}</button>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {sizeOpts.length > 0 && (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
+                <label style={{ fontSize: '0.9rem', fontWeight: 'bold', color: 'var(--text-secondary)' }}>{lang === 'he' ? 'מידה' : lang === 'en' ? 'Size' : 'المقاس'}</label>
+                <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px' }}>
+                  {sizeOpts.map(s => (
+                    <button key={s} type="button" onClick={() => setSizeFilter(sizeFilter === s ? '' : s)} className={`shop-pill${sizeFilter === s ? ' on' : ''}`}>{s}</button>
+                  ))}
+                </div>
+              </div>
+            )}
+
             <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
               <label style={{ fontSize: '0.9rem', fontWeight: 'bold', color: 'var(--text-secondary)' }}>ترتيب حسب</label>
               <select
@@ -159,8 +220,13 @@ export default function ProductGrid({ title, products, subsections = [], emptyMe
               </select>
             </div>
 
+            <label style={{ display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer', fontSize: '0.9rem', color: 'var(--text-secondary)' }}>
+              <input type="checkbox" checked={inStockOnly} onChange={(e) => setInStockOnly(e.target.checked)} />
+              {lang === 'he' ? 'במלאי בלבד' : lang === 'en' ? 'In stock only' : 'المتوفر فقط'}
+            </label>
+
             <button
-              onClick={() => { setPriceMin(''); setPriceMax(''); setCategory(''); setSortBy('date_desc'); }}
+              onClick={() => { setPriceMin(''); setPriceMax(''); setCategory(''); setSortBy('date_desc'); setColorFilter(''); setSizeFilter(''); setInStockOnly(false); }}
               style={{ background: 'transparent', border: 'none', color: '#e74c3c', cursor: 'pointer', textDecoration: 'underline', padding: '0.6rem' }}
             >
               إعادة ضبط
@@ -175,53 +241,9 @@ export default function ProductGrid({ title, products, subsections = [], emptyMe
         </div>
       ) : (
         <div className="product-grid" id="product-grid">
-            {filteredProducts.map((product) => {
-              const hasVariants = product.variants && product.variants.length > 0;
-              return (
-              <div className="product-card reveal" key={product.id}>
-                  <div className="product-image-container" style={{ position: 'relative', width: '100%', aspectRatio: '3 / 4' }}>
-                    <Link href={`/product/${product.id}`} className="product-image" style={{ width: '100%', height: '100%', position: 'relative', display: 'block' }}>
-                      <Image 
-                        src={(product.images && product.images.length > 0) ? product.images[0] : (product.image || '/assets/black_jilbab_1779926556174.png')} 
-                        alt={product.title} 
-                        fill
-                        style={{ objectFit: 'cover' }}
-                      />
-                    </Link>
-                    <button
-                      onClick={(e) => { e.preventDefault(); toggleWishlist(product); }}
-                      aria-label={isInWishlist(product.id) ? `إزالة ${product.title} من المفضلة` : `إضافة ${product.title} إلى المفضلة`}
-                      aria-pressed={isInWishlist(product.id)}
-                      style={{ position: 'absolute', top: '10px', right: '10px', background: '#fff', border: 'none', borderRadius: '50%', width: '40px', height: '40px', display: 'flex', justifyContent: 'center', alignItems: 'center', cursor: 'pointer', boxShadow: '0 2px 5px rgba(0,0,0,0.1)', zIndex: 10 }}
-                    >
-                      <i className={isInWishlist(product.id) ? "fa-solid fa-heart" : "fa-regular fa-heart"} style={{ color: isInWishlist(product.id) ? '#e74c3c' : 'var(--text-secondary)', fontSize: '1.2rem', transition: 'all 0.3s' }}></i>
-                    </button>
-                  </div>
-                  <div className="product-info">
-                      <Link href={`/product/${product.id}`}><h3 className="product-title">{product.title}</h3></Link>
-                      {ratings[product.id]?.count > 0 && (
-                        <div style={{ display: 'flex', alignItems: 'center', gap: '4px', margin: '2px 0 4px', fontSize: '0.8rem' }}>
-                          {[...Array(5)].map((_, i) => (
-                            <i key={i} className="fa-solid fa-star" style={{ color: i < Math.round(ratings[product.id].avg) ? '#f1c40f' : '#e0e0e0', fontSize: '0.75rem' }}></i>
-                          ))}
-                          <span style={{ color: 'var(--text-secondary)' }}>({ratings[product.id].count})</span>
-                        </div>
-                      )}
-                      <p className="product-price">{product.price} {t('price')}</p>
-                      
-                      {hasVariants ? (
-                        <Link href={`/product/${product.id}`} className="add-to-cart" style={{ display: 'block', textAlign: 'center' }}>
-                          {t('chooseSize')}
-                        </Link>
-                      ) : (
-                        <button className="add-to-cart" onClick={() => addToCart(product)}>
-                            {t('addToCart')}
-                        </button>
-                      )}
-                  </div>
-              </div>
-              );
-            })}
+            {filteredProducts.map((product) => (
+              <ProductCard key={product.id} product={product} rating={ratings[product.id]} />
+            ))}
         </div>
       )}
     </section>

@@ -47,15 +47,15 @@ export default function Navbar() {
   return (
     <header style={{ position: 'fixed', top: 0, width: '100%', zIndex: 1000 }}>
       <div style={{
-        background: 'var(--accent-color)',
-        color: '#fff',
+        background: 'var(--blush)',
+        color: 'var(--text-primary)',
         textAlign: 'center',
-        padding: '8px 10px',
-        fontSize: '0.75rem',
-        letterSpacing: '0.15em',
-        textTransform: 'uppercase',
-        fontWeight: '300',
-        lineHeight: '1.4'
+        padding: '9px 10px',
+        fontSize: '0.78rem',
+        letterSpacing: '0.06em',
+        fontWeight: '500',
+        lineHeight: '1.4',
+        borderBottom: '1px solid var(--glass-border)'
       }}>
         {t('announcement')}
       </div>
@@ -78,6 +78,7 @@ export default function Navbar() {
         <nav className="nav-container hide-mobile">
           <ul className="nav-links" style={{ display: 'flex', gap: '1.5rem', listStyle: 'none' }}>
             <li><Link href="/">{t('home')}</Link></li>
+            <li><Link href="/shop">{lang === 'he' ? 'חנות' : lang === 'en' ? 'Shop' : 'تسوّقي'}</Link></li>
             {sections.map(sec => {
               const secTitleKey = sec.title_en ? sec.title_en.toLowerCase() : '';
               const secTitle = t(secTitleKey) !== secTitleKey ? t(secTitleKey) : (lang === 'en' ? sec.title_en : sec.title_ar);

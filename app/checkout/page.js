@@ -14,6 +14,7 @@ import autoTable from 'jspdf-autotable';
 import { amiriBase64 } from '@/lib/fonts/amiriBase64';
 import JsBarcode from 'jsbarcode';
 import CardForm from '@/components/CardForm';
+import { track } from '@/lib/analytics';
 
 // Card payments are shown unless explicitly disabled. The UI + flow are ready;
 // going live only requires wiring the gateway in /api/payments/charge.
@@ -79,17 +80,35 @@ export default function Checkout() {
   const [promoLoading, setPromoLoading] = useState(false);
 
   // Form State
+  const [wantBusinessInvoice, setWantBusinessInvoice] = useState(false);
   const [formData, setFormData] = useState({
     fullName: '',
     phone: '',
     address: '',
-    city: ''
+    city: '',
+    invoiceBusinessName: '',
+    invoiceTaxId: ''
   });
+
+  // Saved address book (logged-in customers) — chosen/prefilled at step 1.
+  const [savedAddresses, setSavedAddresses] = useState([]);
+
+  // Map an address-book entry (or a legacy flat profile) into the checkout form.
+  const applyAddress = (a) => {
+    if (!a) return;
+    setFormData(prev => ({
+      ...prev,
+      fullName: a.fullName || prev.fullName || '',
+      phone: a.phone1 || a.phone || prev.phone || '',
+      city: a.city || prev.city || '',
+      address: [a.street, a.neighborhood].filter(Boolean).join('، ') || a.address || prev.address || '',
+    }));
+  };
 
   useEffect(() => {
     setIsClient(true);
-    if (cart.length > 0 && typeof window !== 'undefined' && window.gtag) {
-      window.gtag('event', 'begin_checkout', {
+    if (cart.length > 0) {
+      track('begin_checkout', {
         currency: 'ILS',
         value: Number(cartTotal) || 0,
         items: cart.map(it => ({ item_id: it.sku || it.id, item_name: it.title, price: Number(it.price) || 0, quantity: it.quantity }))
@@ -98,7 +117,8 @@ export default function Checkout() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // Prefill the saved address for logged-in customers.
+  // Prefill from the saved address book (default entry) for logged-in customers,
+  // falling back to the legacy flat profile fields for older accounts.
   useEffect(() => {
     if (!user) return;
     setFormData(prev => ({ ...prev, email: user.email }));
@@ -107,19 +127,18 @@ export default function Checkout() {
         const snap = await getDoc(doc(db, 'customers', user.uid));
         if (snap.exists()) {
           const c = snap.data();
-          setFormData(prev => ({
-            ...prev,
-            fullName: prev.fullName || c.fullName || '',
-            phone: prev.phone || c.phone1 || c.phone || '',
-            city: prev.city || c.city || '',
-            address: prev.address || c.street || c.address || '',
-            email: user.email || c.email || '',
-          }));
+          const list = Array.isArray(c.addresses) ? c.addresses : [];
+          setSavedAddresses(list);
+          const def = list[Number(c.defaultAddressIndex) || 0];
+          // Prefer a structured saved address; else legacy flat fields.
+          applyAddress(def || { fullName: c.fullName, phone1: c.phone1 || c.phone, city: c.city, street: c.street || c.address });
+          setFormData(prev => ({ ...prev, email: user.email || c.email || '' }));
         }
       } catch (err) {
         console.error('Could not load saved address', err);
       }
     })();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [user]);
 
   const handleInputChange = (e) => {
@@ -188,6 +207,16 @@ export default function Checkout() {
         setAppliedPromo(null);
         setDiscountAmount(0);
         showToast('كود الخصم غير مفعّل', 'error');
+        setPromoLoading(false);
+        return;
+      }
+
+      // Minimum-order gate
+      const minSubtotal = Number(promoData.minSubtotal) || 0;
+      if (minSubtotal > 0 && Number(cartTotal) < minSubtotal) {
+        setAppliedPromo(null);
+        setDiscountAmount(0);
+        showToast(`الحد الأدنى للطلب لاستخدام هذا الكود هو ₪${minSubtotal}`, 'error');
         setPromoLoading(false);
         return;
       }
@@ -313,6 +342,19 @@ export default function Checkout() {
   const saveCustomerProfile = async (orderId) => {
     try {
       if (!user) return;
+      // Upsert the just-used address into the address book (dedup by city+street
+      // +phone) so it's reusable next time without retyping.
+      const entry = {
+        label: '', fullName: formData.fullName || '', phone1: formData.phone || '',
+        phone2: '', city: formData.city || '', neighborhood: '',
+        street: formData.address || '', notes: '',
+      };
+      const sig = (a) => `${(a.city || '').trim()}|${(a.street || '').trim()}|${String(a.phone1 || a.phone || '').replace(/\D/g, '')}`;
+      let nextAddresses = Array.isArray(savedAddresses) ? [...savedAddresses] : [];
+      if (entry.street && entry.city && !nextAddresses.some(a => sig(a) === sig(entry))) {
+        nextAddresses = [...nextAddresses, entry].slice(0, 10);
+      }
+
       const customerRef = doc(db, 'customers', user.uid);
       await setDoc(customerRef, {
         uid: user.uid,
@@ -321,6 +363,7 @@ export default function Checkout() {
         phone1: formData.phone || formData.phone1 || '',
         city: formData.city || '',
         street: formData.address || formData.street || '',
+        addresses: nextAddresses,
         lastOrderId: orderId,
         lastOrderDate: new Date().toISOString(),
         updatedAt: serverTimestamp()
@@ -424,16 +467,14 @@ export default function Checkout() {
 
       await generateReceipt(orderId, receiptOrder);
 
-      if (typeof window !== 'undefined' && window.gtag) {
-        window.gtag('event', 'purchase', {
-          transaction_id: orderId, value: data.total, currency: 'ILS',
-          items: cart.map(item => ({ item_id: item.sku || item.id, item_name: item.title, price: item.price, quantity: item.quantity }))
-        });
-      }
+      track('purchase', {
+        transaction_id: orderId, value: data.total, currency: 'ILS',
+        items: cart.map(item => ({ item_id: item.sku || item.id, item_name: item.title, price: item.price, quantity: item.quantity }))
+      });
 
       clearCart();
       showToast(t('orderSuccess') + ` ${orderId}`, 'success');
-      router.push('/profile');
+      router.push(`/checkout/success?order=${encodeURIComponent(orderId)}&total=${encodeURIComponent(data.total)}&pay=${encodeURIComponent(paymentMethod)}`);
     } catch (error) {
       console.error("Checkout error:", error);
       showToast(error.message || t('checkoutError'), "error");
@@ -460,7 +501,7 @@ export default function Checkout() {
     padding: '1rem',
     borderRadius: '12px',
     border: paymentMethod === method ? '2px solid var(--accent-color)' : '2px solid var(--border-color)',
-    background: paymentMethod === method ? 'rgba(124,58,237,0.08)' : 'var(--surface-color)',
+    background: paymentMethod === method ? 'var(--accent-soft)' : 'var(--surface-color)',
     cursor: 'pointer',
     textAlign: 'center',
     transition: 'all 0.3s',
@@ -495,10 +536,36 @@ export default function Checkout() {
                 {!user && (
                   <input required type="email" name="email" aria-label={t('email')} placeholder={t('email')} value={formData.email || ''} onChange={handleInputChange} style={inputStyle} />
                 )}
+
+                {/* Saved address picker (logged-in customers with a book). */}
+                {user && savedAddresses.length > 0 && (
+                  <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.5rem', marginBottom: '0.2rem' }}>
+                    {savedAddresses.map((a, i) => (
+                      <button key={i} type="button" onClick={() => applyAddress(a)}
+                        style={{ padding: '0.5rem 0.9rem', borderRadius: '99px', border: '1.5px solid var(--border-color)', background: 'var(--surface-color)', color: 'var(--text-primary)', cursor: 'pointer', fontSize: '0.8rem', fontWeight: 600, display: 'inline-flex', alignItems: 'center', gap: '6px' }}>
+                        <i className="fa-solid fa-location-dot" style={{ color: 'var(--accent-color)', fontSize: '0.75rem' }} />
+                        {a.label || a.city || a.fullName || `عنوان ${i + 1}`}
+                      </button>
+                    ))}
+                  </div>
+                )}
                 <input required type="text" name="fullName" aria-label={t('fullName')} placeholder={t('fullName')} value={formData.fullName} onChange={handleInputChange} style={inputStyle} />
                 <input required type="tel" name="phone" aria-label={t('phone')} placeholder={t('phone')} value={formData.phone} onChange={handleInputChange} style={inputStyle} />
                 <input required type="text" name="city" aria-label={t('city')} placeholder={t('city')} value={formData.city} onChange={handleInputChange} style={inputStyle} />
                 <textarea required name="address" aria-label={t('address')} placeholder={t('address')} value={formData.address} onChange={handleInputChange} style={{ ...inputStyle, minHeight: '100px' }}></textarea>
+
+                {/* Optional: tax invoice for a business buyer (חשבונית מס לעסק) */}
+                <label style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '0.92rem', cursor: 'pointer', color: 'var(--text-secondary)' }}>
+                  <input type="checkbox" checked={wantBusinessInvoice} onChange={e => setWantBusinessInvoice(e.target.checked)} />
+                  {t('businessInvoiceToggle') || 'أحتاج فاتورة ضريبية لعمل تجاري (חשבונית לעסק)'}
+                </label>
+                {wantBusinessInvoice && (
+                  <>
+                    <input type="text" name="invoiceBusinessName" placeholder={t('businessName') || 'اسم العمل / שם העסק'} value={formData.invoiceBusinessName} onChange={handleInputChange} style={inputStyle} />
+                    <input type="text" dir="ltr" name="invoiceTaxId" placeholder={t('businessTaxId') || 'ع.م / ח.פ — מספר עוסק'} value={formData.invoiceTaxId} onChange={handleInputChange} style={inputStyle} />
+                  </>
+                )}
+
                 <button type="submit" className="btn-primary" style={{ marginTop: '1rem', padding: '1rem' }}>{t('next')}</button>
               </form>
             )}

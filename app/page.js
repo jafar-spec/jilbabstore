@@ -4,6 +4,7 @@ import Hero from '@/components/Hero';
 import ProductGrid from '@/components/ProductGrid';
 import CartSidebar from '@/components/CartSidebar';
 import Footer from '@/components/Footer';
+import CategoryBar from '@/components/CategoryBar';
 import AdsBanner from '@/components/AdsBanner';
 import { useEffect, useState } from 'react';
 import { useLanguage } from '@/context/LanguageContext';
@@ -44,13 +45,17 @@ export default function Home() {
     <main>
       <Hero />
 
-      {/* Promotional Ads Banner — admin-controlled */}
+      {/* Promotional ad banner (admin-managed images) */}
       <AdsBanner />
-      
+
+      {!loading && sections.length > 0 && <CategoryBar sections={sections} />}
+
       {loading ? (
-          <div style={{ textAlign: 'center', padding: '4rem 0', fontFamily: 'var(--font-serif)', color: 'var(--text-secondary)' }}>
-            {t('loading') || "Loading..."}
-          </div>
+          <section className="products">
+            <div className="product-grid" id="product-grid">
+              {[...Array(8)].map((_, i) => <div key={i} className="shop-skeleton" />)}
+            </div>
+          </section>
       ) : (
           <>
             {sections.length === 0 ? (

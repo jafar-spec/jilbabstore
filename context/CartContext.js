@@ -2,6 +2,9 @@
 
 import { createContext, useState, useContext, useEffect, useRef } from 'react';
 import { track, productItem } from '@/lib/analytics';
+import { auth } from '@/lib/firebase';
+import { onAuthStateChanged } from 'firebase/auth';
+import { saveCartSnapshot, clearCartSnapshot } from '@/lib/db';
 
 const CartContext = createContext();
 
@@ -12,6 +15,7 @@ export function CartProvider({ children }) {
   // skipped before then — prevents the empty default from overwriting a saved
   // cart, including under React StrictMode's double-mount.
   const [isHydrated, setIsHydrated] = useState(false);
+  const customerRef = useRef(null); // default-app (customer) session
 
   // Load from localStorage on mount.
   useEffect(() => {
@@ -22,10 +26,29 @@ export function CartProvider({ children }) {
     setIsHydrated(true);
   }, []);
 
+  // Track the customer session so we can mirror their cart for recovery emails.
+  useEffect(() => {
+    const unsub = onAuthStateChanged(auth, (u) => { customerRef.current = u; });
+    return () => unsub();
+  }, []);
+
   // Save to localStorage when cart changes (only after hydration completes).
   useEffect(() => {
     if (!isHydrated) return;
     localStorage.setItem('cart', JSON.stringify(cart));
+  }, [cart, isHydrated]);
+
+  // Mirror a logged-in customer's cart to Firestore (debounced) so the
+  // abandoned-cart cron can nudge them. Cleared on checkout / empty cart.
+  useEffect(() => {
+    if (!isHydrated) return;
+    const u = customerRef.current;
+    if (!u) return;
+    const total = cart.reduce((s, it) => s + (Number(it.price) || 0) * (Number(it.quantity) || 0), 0);
+    const id = setTimeout(() => {
+      saveCartSnapshot(u.uid, { items: cart, total, email: u.email, name: u.displayName || '', phone: u.phoneNumber || '' }).catch(() => {});
+    }, 3000);
+    return () => clearTimeout(id);
   }, [cart, isHydrated]);
 
   const addToCart = (product) => {
@@ -93,6 +116,8 @@ export function CartProvider({ children }) {
 
   const clearCart = () => {
     setCart([]);
+    const u = customerRef.current;
+    if (u) clearCartSnapshot(u.uid).catch(() => {});
   };
 
   const cartCount = cart.reduce((sum, item) => sum + (Number(item.quantity) || 0), 0);

@@ -7,7 +7,7 @@ export async function POST(request) {
     const rl = rateLimit(`promo:${clientIp(request)}`, { limit: 30, windowMs: 60_000 });
     if (!rl.ok) return NextResponse.json({ error: 'Too many requests' }, { status: 429 });
 
-    const { code } = await request.json();
+    const { code, subtotal } = await request.json();
 
     if (!code || typeof code !== 'string' || code.length < 2 || code.length > 30) {
       return NextResponse.json({ error: 'Invalid promo code' }, { status: 400 });
@@ -41,14 +41,22 @@ export async function POST(request) {
     // Normalize field names (handle old promos stored with 'value' and 'percentage')
     const discountValue = promo.discountValue || promo.value || 0;
     const type = (promo.type === 'percentage' ? 'percent' : promo.type) || 'fixed';
+    const minSubtotal = Number(promo.minSubtotal) || 0;
 
-    console.log('Promo found:', { code: promo.code, type, discountValue, raw: promo });
+    // Minimum-order gate (only enforced when the caller passes the cart subtotal).
+    if (minSubtotal > 0 && subtotal != null && Number(subtotal) < minSubtotal) {
+      return NextResponse.json(
+        { valid: false, error: `الحد الأدنى للطلب لاستخدام هذا الكود هو ₪${minSubtotal}`, minSubtotal },
+        { status: 400 }
+      );
+    }
 
     return NextResponse.json({
       valid: true,
       code: promo.code,
       type: type,
-      discountValue: Number(discountValue)
+      discountValue: Number(discountValue),
+      minSubtotal,
     });
 
   } catch (error) {

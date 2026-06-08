@@ -12,25 +12,27 @@ import {
   sendEmailVerification,
   sendPasswordResetEmail,
   onAuthStateChanged,
-  signOut
+  signOut,
+  deleteUser
 } from 'firebase/auth';
-import { getCustomerOrders } from '@/lib/db';
+import { getCustomerOrders, getMyReturnRequests, requestReturn, getCustomerProfile, requestAccountDeletion, saveCustomerAddresses } from '@/lib/db';
+
+// An order can be cancelled by the customer only while it is still processing
+// and its stock is merely reserved (server re-checks this authoritatively).
+const isCancellable = (o) => (o.status || '').startsWith('قيد المعالجة') && (o.stockState || 'reserved') === 'reserved';
+const EMPTY_ADDR = { label: '', fullName: '', phone1: '', phone2: '', city: '', neighborhood: '', street: '', notes: '' };
 
 // ─── Style helpers ───────────────────────────────────────────────────────────
 
 const getStatusStyle = (status) => {
-  switch (status) {
-    case 'تم التوصيل':
-      return { bg: '#ecfdf5', color: '#059669', icon: 'fa-circle-check' };
-    case 'جاري التوصيل':
-      return { bg: '#fff7ed', color: '#ea580c', icon: 'fa-truck-fast' };
-    case 'قيد المعالجة':
-      return { bg: '#eff6ff', color: '#2563eb', icon: 'fa-spinner' };
-    case 'ملغي':
-      return { bg: '#fef2f2', color: '#dc2626', icon: 'fa-circle-xmark' };
-    default:
-      return { bg: '#f3f4f6', color: '#6b7280', icon: 'fa-circle-question' };
-  }
+  const s = status || '';
+  if (s === 'تم التوصيل') return { bg: '#ecfdf5', color: '#059669', icon: 'fa-circle-check' };
+  if (s === 'جاري التوصيل') return { bg: '#fff7ed', color: '#ea580c', icon: 'fa-truck-fast' };
+  if (s === 'تم التجهيز') return { bg: '#eef2ff', color: '#4f46e5', icon: 'fa-box-open' };
+  if (s.includes('قيد المعالجة')) return { bg: '#eff6ff', color: '#2563eb', icon: 'fa-spinner' };
+  if (s === 'ملغي') return { bg: '#fef2f2', color: '#dc2626', icon: 'fa-circle-xmark' };
+  if (s === 'مرتجع') return { bg: '#fdf4ff', color: '#a21caf', icon: 'fa-rotate-left' };
+  return { bg: '#f3f4f6', color: '#6b7280', icon: 'fa-circle-question' };
 };
 
 const getUserInitials = (user) => {
@@ -137,6 +139,22 @@ export default function ProfilePage() {
   const [orders, setOrders] = useState([]);
   const [authMethod, setAuthMethod] = useState('phone');
 
+  // Returns self-service: my requests by orderId + the inline form state.
+  const [returnsByOrder, setReturnsByOrder] = useState({});
+  const [returnFor, setReturnFor] = useState(null);   // orderId with form open
+  const [returnReason, setReturnReason] = useState('');
+  const [returnBusy, setReturnBusy] = useState(false);
+
+  // Order cancellation (self-service, before fulfilment).
+  const [cancelBusy, setCancelBusy] = useState(null); // orderId in flight
+
+  // Address book (saved delivery addresses, prefilled at checkout).
+  const [addresses, setAddresses] = useState([]);
+  const [defaultIdx, setDefaultIdx] = useState(0);
+  const [addrForm, setAddrForm] = useState(null);     // index | 'new' | null
+  const [addrDraft, setAddrDraft] = useState(EMPTY_ADDR);
+  const [addrBusy, setAddrBusy] = useState(false);
+
   // Email Auth State
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -166,8 +184,17 @@ export default function ProfilePage() {
       if (currentUser) {
         setUser(currentUser);
         try {
-          const userOrders = await getCustomerOrders(currentUser.uid);
+          const userOrders = await getCustomerOrders(currentUser.uid, currentUser.email);
           setOrders(userOrders);
+          const myReturns = await getMyReturnRequests(currentUser.uid);
+          const map = {};
+          myReturns.forEach(r => { map[r.orderId] = r; });
+          setReturnsByOrder(map);
+          const profile = await getCustomerProfile(currentUser.uid).catch(() => null);
+          if (profile?.addresses?.length) {
+            setAddresses(profile.addresses);
+            setDefaultIdx(Number(profile.defaultAddressIndex) || 0);
+          }
         } catch (err) {
           console.error('Could not fetch orders', err);
         }
@@ -179,6 +206,30 @@ export default function ProfilePage() {
     });
     return () => unsubscribe();
   }, []);
+
+  // ── Return request ─────────────────────────────────────────────────────────
+  const submitReturn = async (order) => {
+    if (returnBusy) return;
+    setReturnBusy(true);
+    try {
+      await requestReturn({
+        orderId: order.id,
+        uid: user?.uid,
+        reason: returnReason,
+        items: (order.items || []).map(i => ({ title: i.title, quantity: i.quantity, sku: i.sku || null, selectedSize: i.selectedSize || '' })),
+      });
+      setReturnsByOrder(prev => ({ ...prev, [order.id]: { orderId: order.id, status: 'pending', reason: returnReason } }));
+      setReturnFor(null);
+      setReturnReason('');
+    } catch (err) {
+      console.error('return request failed', err);
+      alert('تعذّر إرسال طلب الإرجاع، حاول مرة أخرى');
+    } finally {
+      setReturnBusy(false);
+    }
+  };
+
+  const RETURN_STATUS_AR = { pending: 'قيد المراجعة', approved: 'تمت الموافقة', rejected: 'مرفوض', done: 'تم الاسترداد' };
 
   // ── Email auth ───────────────────────────────────────────────────────────
   const handleEmailAuth = async (e) => {
@@ -300,6 +351,145 @@ export default function ProfilePage() {
     router.refresh();
   }, [router]);
 
+  // ── Privacy: export + delete my data ─────────────────────────────────────
+  const exportMyData = useCallback(async () => {
+    try {
+      const profile = await getCustomerProfile(user?.uid).catch(() => null);
+      const esc = (s) => String(s ?? '').replace(/[&<>]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;' }[c]));
+      const origin = window.location.origin;
+      const name = user?.displayName || profile?.fullName || '—';
+
+      const orderRows = (orders || []).map(o => {
+        const items = (o.items || []).map(it => `${esc(it.title)}${it.selectedSize && it.selectedSize !== 'عام' ? ` (${esc(it.selectedSize)})` : ''} ×${it.quantity}`).join('، ');
+        const d = o.date?.toDate ? o.date.toDate() : (o.date || o.createdAt);
+        return `<tr>
+          <td>#${esc(String(o.id).slice(0, 8).toUpperCase())}</td>
+          <td>${d ? new Date(d).toLocaleDateString('ar-EG') : '—'}</td>
+          <td>${esc(o.status || '—')}</td>
+          <td>${esc(items)}</td>
+          <td style="white-space:nowrap;">₪${(Number(o.total) || 0).toFixed(2)}</td>
+        </tr>`;
+      }).join('') || '<tr><td colspan="5" style="text-align:center;color:#888;">لا توجد طلبات</td></tr>';
+
+      const returns = Object.values(returnsByOrder);
+      const returnRows = returns.length
+        ? returns.map(r => `<tr><td>#${esc(String(r.orderId || '').slice(0, 8).toUpperCase())}</td><td>${esc(r.status || '')}</td><td>${esc(r.reason || '')}</td></tr>`).join('')
+        : '';
+
+      const html = `<!doctype html><html lang="ar" dir="rtl"><head><meta charset="utf-8"/>
+        <title>بياناتي — متجر جلباب</title>
+        <style>
+          *{box-sizing:border-box} body{font-family:'Segoe UI',Tahoma,Arial,sans-serif;color:#1c1a19;max-width:820px;margin:0 auto;padding:28px;line-height:1.7;}
+          .hd{display:flex;align-items:center;gap:14px;border-bottom:2px solid #111;padding-bottom:14px;margin-bottom:18px;}
+          .hd img{width:54px;height:54px;object-fit:contain;}
+          .hd h1{font-size:1.5rem;margin:0;} .muted{color:#777;font-size:.85rem;}
+          h2{font-size:1.05rem;margin:22px 0 8px;border-bottom:1px solid #e5e5e5;padding-bottom:4px;}
+          .box{background:#f7f5f2;border:1px solid #eee;border-radius:10px;padding:12px 14px;font-size:.92rem;line-height:1.9;}
+          table{width:100%;border-collapse:collapse;font-size:.85rem;margin-top:6px;}
+          th,td{border-bottom:1px solid #eee;padding:8px 6px;text-align:right;vertical-align:top;}
+          th{background:#f3f0ec;}
+          .print{margin:22px 0;text-align:center;} .print button{background:#141414;color:#fff;border:none;border-radius:999px;padding:10px 28px;font-size:1rem;cursor:pointer;}
+          .ftr{margin-top:24px;border-top:1px solid #eee;padding-top:12px;color:#999;font-size:.78rem;text-align:center;}
+          @media print{.print{display:none}body{padding:0}}
+        </style></head><body>
+        <div class="hd">
+          <img src="${origin}/assets/logo.png" alt=""/>
+          <div><h1>بياناتي الشخصية</h1><div class="muted">JILBABSTORE — My personal data · ${new Date().toLocaleDateString('ar-EG')}</div></div>
+        </div>
+        <h2>معلومات الحساب</h2>
+        <div class="box">
+          <strong>الاسم:</strong> ${esc(name)}<br/>
+          <strong>البريد:</strong> ${esc(user?.email || profile?.email || '—')}<br/>
+          <strong>الهاتف:</strong> ${esc(user?.phoneNumber || profile?.phone1 || profile?.phone || '—')}<br/>
+          <strong>المدينة:</strong> ${esc(profile?.city || '—')}<br/>
+          <strong>العنوان:</strong> ${esc(profile?.street || profile?.address || '—')}<br/>
+          <strong>معرّف المستخدم:</strong> <span class="muted">${esc(user?.uid || '')}</span>
+        </div>
+        <h2>الطلبات (${(orders || []).length})</h2>
+        <table><thead><tr><th>الطلب</th><th>التاريخ</th><th>الحالة</th><th>المنتجات</th><th>الإجمالي</th></tr></thead><tbody>${orderRows}</tbody></table>
+        ${returnRows ? `<h2>طلبات الإرجاع (${returns.length})</h2><table><thead><tr><th>الطلب</th><th>الحالة</th><th>السبب</th></tr></thead><tbody>${returnRows}</tbody></table>` : ''}
+        <div class="print"><button onclick="window.print()">🖨️ حفظ كـ PDF / طباعة</button></div>
+        <div class="ftr">هذا المستند يحتوي على البيانات الشخصية المحفوظة لديك في متجر جلباب. صُدر بتاريخ ${new Date().toLocaleString('ar-EG')}.</div>
+        <script>window.onload=function(){setTimeout(function(){window.print()},400)}</script>
+        </body></html>`;
+
+      const w = window.open('', '_blank');
+      if (w) { w.document.write(html); w.document.close(); }
+      else alert('يرجى السماح بالنوافذ المنبثقة لحفظ ملف PDF');
+    } catch (err) { console.error('export failed', err); alert('تعذّر تنزيل البيانات'); }
+  }, [user, orders, returnsByOrder]);
+
+  const deleteMyAccount = useCallback(async () => {
+    if (!user) return;
+    if (!window.confirm('سيتم تقديم طلب حذف حسابك وبياناتك الشخصية. الطلبات تُحفظ كما يقتضي القانون الضريبي. متابعة؟')) return;
+    try {
+      await requestAccountDeletion(user.uid, user.email || '');
+      try { await deleteUser(user); } catch (e) { /* may need recent login; request is filed regardless */ }
+      await signOut(auth).catch(() => {});
+      alert('تم استلام طلب الحذف. سنكمل المعالجة قريباً.');
+      router.refresh();
+    } catch (err) { console.error('deletion failed', err); alert('تعذّر تقديم الطلب، حاول لاحقاً'); }
+  }, [user, router]);
+
+  // ── Cancel an order (self-service) ───────────────────────────────────────
+  const cancelOrder = async (order) => {
+    if (cancelBusy) return;
+    if (!window.confirm('سيتم إلغاء هذا الطلب وتحرير المخزون. هل أنت متأكد؟')) return;
+    setCancelBusy(order.id);
+    try {
+      const idToken = await auth.currentUser.getIdToken();
+      const res = await fetch('/api/orders/cancel', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${idToken}` },
+        body: JSON.stringify({ orderId: order.id }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(data.error || 'تعذّر إلغاء الطلب');
+      setOrders(prev => prev.map(o => o.id === order.id ? { ...o, status: 'ملغي', stockState: 'released' } : o));
+    } catch (err) {
+      alert(err.message || 'تعذّر إلغاء الطلب، حاول لاحقاً');
+    } finally {
+      setCancelBusy(null);
+    }
+  };
+
+  // ── Address book ─────────────────────────────────────────────────────────
+  const persistAddresses = async (list, idx) => {
+    setAddrBusy(true);
+    try {
+      await saveCustomerAddresses(user.uid, list, idx);
+      setAddresses(list);
+      setDefaultIdx(idx);
+    } catch (e) {
+      console.error('save addresses failed', e);
+      alert('تعذّر حفظ العنوان، حاول لاحقاً');
+      throw e;
+    } finally {
+      setAddrBusy(false);
+    }
+  };
+
+  const saveAddress = async () => {
+    if (!addrDraft.fullName?.trim() || !addrDraft.city?.trim() || !addrDraft.street?.trim() || !addrDraft.phone1?.trim()) {
+      alert('يرجى تعبئة الاسم والهاتف والمدينة والعنوان');
+      return;
+    }
+    const list = [...addresses];
+    let idx = defaultIdx;
+    if (addrForm === 'new') { list.push(addrDraft); if (list.length === 1) idx = 0; }
+    else list[addrForm] = addrDraft;
+    try { await persistAddresses(list, idx); setAddrForm(null); setAddrDraft(EMPTY_ADDR); } catch {}
+  };
+
+  const deleteAddress = async (i) => {
+    if (!window.confirm('حذف هذا العنوان؟')) return;
+    const list = addresses.filter((_, j) => j !== i);
+    let idx = defaultIdx;
+    if (i === defaultIdx) idx = 0;
+    else if (i < defaultIdx) idx = Math.max(0, defaultIdx - 1);
+    try { await persistAddresses(list, idx); } catch {}
+  };
+
   // ── Loading skeleton ─────────────────────────────────────────────────────
   if (loading) {
     return (
@@ -326,7 +516,7 @@ export default function ProfilePage() {
           {/* ── Welcome Banner ──────────────────────────────────── */}
           <div
             style={{
-              background: 'linear-gradient(135deg, var(--accent-color) 0%, #7c3aed 100%)',
+              background: 'linear-gradient(135deg, #1a1a1a 0%, #4a4a4a 100%)',
               borderRadius: '20px',
               padding: '2.5rem',
               marginBottom: '1.5rem',
@@ -400,6 +590,104 @@ export default function ProfilePage() {
                 <i className="fa-solid fa-right-from-bracket" />
                 تسجيل الخروج
               </button>
+            </div>
+          </div>
+
+          {/* ── Privacy: data export + deletion ─────────────────── */}
+          <div style={{ ...styles.card, marginTop: '1.5rem' }}>
+            <div style={{ padding: '1.5rem 2rem', display: 'flex', flexWrap: 'wrap', gap: '0.8rem', alignItems: 'center', justifyContent: 'space-between' }}>
+              <div style={{ minWidth: '180px' }}>
+                <div style={{ fontWeight: 700, color: 'var(--text-primary)' }}>الخصوصية وبياناتي</div>
+                <div style={{ fontSize: '0.82rem', color: 'var(--text-secondary)', marginTop: '2px' }}>نزّلي نسخة من بياناتك أو اطلبي حذف حسابك.</div>
+              </div>
+              <div style={{ display: 'flex', gap: '0.6rem', flexWrap: 'wrap' }}>
+                <button onClick={exportMyData} style={{ padding: '0.6rem 1.1rem', borderRadius: '10px', border: '1px solid var(--border-color)', background: 'transparent', color: 'var(--text-primary)', cursor: 'pointer', fontWeight: 600, fontSize: '0.85rem', display: 'inline-flex', alignItems: 'center', gap: '6px' }}>
+                  <i className="fa-solid fa-file-pdf" /> تنزيل بياناتي (PDF)
+                </button>
+                <button onClick={deleteMyAccount} style={{ padding: '0.6rem 1.1rem', borderRadius: '10px', border: '1px solid #e0b4b4', background: 'transparent', color: '#c0392b', cursor: 'pointer', fontWeight: 600, fontSize: '0.85rem', display: 'inline-flex', alignItems: 'center', gap: '6px' }}>
+                  <i className="fa-solid fa-trash-can" /> حذف الحساب
+                </button>
+              </div>
+            </div>
+          </div>
+
+          {/* ── Address Book ────────────────────────────────────── */}
+          <div style={{ ...styles.card, marginBottom: '1.5rem' }}>
+            <div style={{ padding: '1.5rem 2.5rem', borderBottom: '1px solid var(--glass-border)', display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '0.6rem' }}>
+              <h2 style={{ fontSize: '1.2rem', fontWeight: '700', color: 'var(--text-primary)', margin: 0, display: 'flex', alignItems: 'center', gap: '10px' }}>
+                <i className="fa-solid fa-location-dot" style={{ color: 'var(--accent-color)' }} />
+                عناويني
+              </h2>
+              {addrForm === null && (
+                <button onClick={() => { setAddrForm('new'); setAddrDraft(EMPTY_ADDR); }}
+                  style={{ padding: '0.5rem 1.1rem', borderRadius: '10px', border: '1px solid var(--accent-color)', background: 'transparent', color: 'var(--accent-color)', cursor: 'pointer', fontWeight: 700, fontSize: '0.85rem', display: 'inline-flex', alignItems: 'center', gap: '6px' }}>
+                  <i className="fa-solid fa-plus" /> إضافة عنوان
+                </button>
+              )}
+            </div>
+
+            <div style={{ padding: '1.5rem 2.5rem' }}>
+              {/* Add/Edit form */}
+              {addrForm !== null && (
+                <div style={{ background: 'var(--bg-color)', border: '1px solid var(--glass-border)', borderRadius: '14px', padding: '1.2rem', marginBottom: addresses.length ? '1.2rem' : 0, display: 'flex', flexDirection: 'column', gap: '0.8rem' }}>
+                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: '0.8rem' }}>
+                    <input style={styles.input} placeholder="تسمية (المنزل، العمل…)" value={addrDraft.label} onChange={e => setAddrDraft(d => ({ ...d, label: e.target.value }))} />
+                    <input style={styles.input} placeholder="الاسم الكامل *" value={addrDraft.fullName} onChange={e => setAddrDraft(d => ({ ...d, fullName: e.target.value }))} />
+                    <input style={styles.input} placeholder="هاتف *" dir="ltr" value={addrDraft.phone1} onChange={e => setAddrDraft(d => ({ ...d, phone1: e.target.value }))} />
+                    <input style={styles.input} placeholder="هاتف إضافي" dir="ltr" value={addrDraft.phone2} onChange={e => setAddrDraft(d => ({ ...d, phone2: e.target.value }))} />
+                    <input style={styles.input} placeholder="المدينة *" value={addrDraft.city} onChange={e => setAddrDraft(d => ({ ...d, city: e.target.value }))} />
+                    <input style={styles.input} placeholder="الحي / المنطقة" value={addrDraft.neighborhood} onChange={e => setAddrDraft(d => ({ ...d, neighborhood: e.target.value }))} />
+                  </div>
+                  <input style={styles.input} placeholder="الشارع ورقم المنزل *" value={addrDraft.street} onChange={e => setAddrDraft(d => ({ ...d, street: e.target.value }))} />
+                  <input style={styles.input} placeholder="ملاحظات للمندوب (اختياري)" value={addrDraft.notes} onChange={e => setAddrDraft(d => ({ ...d, notes: e.target.value }))} />
+                  <div style={{ display: 'flex', gap: '0.6rem' }}>
+                    <button onClick={saveAddress} disabled={addrBusy} className="btn-primary" style={{ padding: '0.6rem 1.4rem', borderRadius: '10px', fontSize: '0.9rem', opacity: addrBusy ? 0.6 : 1 }}>
+                      {addrBusy ? '...' : 'حفظ العنوان'}
+                    </button>
+                    <button onClick={() => { setAddrForm(null); setAddrDraft(EMPTY_ADDR); }} style={{ padding: '0.6rem 1.4rem', borderRadius: '10px', fontSize: '0.9rem', background: 'none', border: '1px solid var(--glass-border)', color: 'var(--text-secondary)', cursor: 'pointer' }}>
+                      إلغاء
+                    </button>
+                  </div>
+                </div>
+              )}
+
+              {/* Saved list */}
+              {addresses.length === 0 && addrForm === null ? (
+                <div style={{ textAlign: 'center', padding: '2rem 1rem', color: 'var(--text-secondary)' }}>
+                  <i className="fa-regular fa-map" style={{ fontSize: '1.8rem', color: 'var(--border-color)', marginBottom: '0.6rem', display: 'block' }} />
+                  <p style={{ fontSize: '0.9rem', margin: 0 }}>لا توجد عناوين محفوظة. أضيفي عنواناً ليُملأ تلقائياً عند الدفع.</p>
+                </div>
+              ) : (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '0.8rem' }}>
+                  {addresses.map((a, i) => (
+                    <div key={i} style={{ border: `1.5px solid ${i === defaultIdx ? 'var(--accent-color)' : 'var(--border-color)'}`, borderRadius: '14px', padding: '1rem 1.2rem', background: 'var(--bg-color)', display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: '0.8rem', flexWrap: 'wrap' }}>
+                      <div style={{ minWidth: 0 }}>
+                        <div style={{ fontWeight: 700, color: 'var(--text-primary)', display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
+                          {a.label || a.fullName || 'عنوان'}
+                          {i === defaultIdx && <span style={{ fontSize: '0.7rem', fontWeight: 700, color: 'var(--accent-color)', background: 'var(--accent-soft, rgba(0,0,0,0.05))', border: '1px solid var(--accent-color)', borderRadius: '99px', padding: '1px 8px' }}>افتراضي</span>}
+                        </div>
+                        <div style={{ fontSize: '0.85rem', color: 'var(--text-secondary)', marginTop: '4px', lineHeight: 1.6 }}>
+                          {a.fullName} · <span dir="ltr">{a.phone1}</span><br />
+                          {[a.city, a.neighborhood, a.street].filter(Boolean).join('، ')}
+                        </div>
+                      </div>
+                      <div style={{ display: 'flex', gap: '0.4rem', flexShrink: 0 }}>
+                        {i !== defaultIdx && (
+                          <button onClick={() => persistAddresses(addresses, i)} disabled={addrBusy} title="تعيين كافتراضي" style={{ padding: '0.4rem 0.7rem', borderRadius: '8px', border: '1px solid var(--glass-border)', background: 'none', color: 'var(--text-secondary)', cursor: 'pointer', fontSize: '0.78rem' }}>
+                            <i className="fa-regular fa-star" />
+                          </button>
+                        )}
+                        <button onClick={() => { setAddrForm(i); setAddrDraft({ ...EMPTY_ADDR, ...a }); }} disabled={addrBusy} title="تعديل" style={{ padding: '0.4rem 0.7rem', borderRadius: '8px', border: '1px solid var(--glass-border)', background: 'none', color: 'var(--text-secondary)', cursor: 'pointer', fontSize: '0.78rem' }}>
+                          <i className="fa-solid fa-pen" />
+                        </button>
+                        <button onClick={() => deleteAddress(i)} disabled={addrBusy} title="حذف" style={{ padding: '0.4rem 0.7rem', borderRadius: '8px', border: '1px solid #e0b4b4', background: 'none', color: '#c0392b', cursor: 'pointer', fontSize: '0.78rem' }}>
+                          <i className="fa-solid fa-trash-can" />
+                        </button>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
             </div>
           </div>
 
@@ -561,6 +849,61 @@ export default function ProfilePage() {
                               ₪{(Number(order.total) || 0).toFixed(2)}
                             </span>
                           </div>
+
+                          {/* Cancel — only while still processing (stock reserved) */}
+                          {isCancellable(order) && (
+                            <div style={{ marginTop: '0.9rem' }}>
+                              <button onClick={() => cancelOrder(order)} disabled={cancelBusy === order.id}
+                                style={{ padding: '0.45rem 1rem', borderRadius: '99px', fontSize: '0.82rem', fontWeight: 600, background: 'none', border: '1px solid #e0b4b4', color: '#c0392b', cursor: 'pointer', display: 'inline-flex', alignItems: 'center', gap: '6px', opacity: cancelBusy === order.id ? 0.6 : 1 }}>
+                                <i className={`fa-solid ${cancelBusy === order.id ? 'fa-circle-notch fa-spin' : 'fa-circle-xmark'}`} />
+                                {cancelBusy === order.id ? 'جاري الإلغاء...' : 'إلغاء الطلب'}
+                              </button>
+                            </div>
+                          )}
+
+                          {/* Tax invoice / receipt — available once issued (paid or delivered) */}
+                          {(order.invoiceNumber || order.paymentStatus === 'paid' || order.status === 'تم التوصيل') && (
+                            <div style={{ marginTop: '0.9rem' }}>
+                              <a href={`/invoice/${order.id}`} target="_blank" rel="noopener noreferrer"
+                                style={{ padding: '0.45rem 1rem', borderRadius: '99px', fontSize: '0.82rem', fontWeight: 600, background: 'none', border: '1px solid var(--glass-border)', color: 'var(--text-secondary)', cursor: 'pointer', display: 'inline-flex', alignItems: 'center', gap: '6px', textDecoration: 'none' }}>
+                                <i className="fa-solid fa-file-invoice" /> חשבונית / קبלة (فاتورة)
+                              </a>
+                            </div>
+                          )}
+
+                          {/* Returns self-service — only for delivered orders */}
+                          {order.status === 'تم التوصيل' && (
+                            <div style={{ marginTop: '0.9rem' }}>
+                              {returnsByOrder[order.id] ? (
+                                <div style={{ fontSize: '0.85rem', color: 'var(--text-secondary)', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                                  <i className="fa-solid fa-rotate-left" style={{ color: '#a21caf' }} />
+                                  طلب إرجاع: <strong style={{ color: 'var(--text-primary)' }}>{RETURN_STATUS_AR[returnsByOrder[order.id].status] || returnsByOrder[order.id].status}</strong>
+                                </div>
+                              ) : returnFor === order.id ? (
+                                <div style={{ display: 'flex', flexDirection: 'column', gap: '0.6rem', background: 'var(--surface-color)', padding: '0.9rem', borderRadius: '12px', border: '1px solid var(--glass-border)' }}>
+                                  <label style={{ fontSize: '0.85rem', fontWeight: 600 }}>سبب الإرجاع</label>
+                                  <textarea
+                                    value={returnReason} onChange={(e) => setReturnReason(e.target.value)}
+                                    placeholder="مثال: المقاس غير مناسب / المنتج به عيب…" rows={3}
+                                    style={{ padding: '0.6rem 0.8rem', borderRadius: '10px', border: '1px solid var(--glass-border)', background: 'var(--bg-color)', color: 'var(--text-primary)', fontFamily: 'inherit', fontSize: '0.88rem', resize: 'vertical' }}
+                                  />
+                                  <div style={{ display: 'flex', gap: '0.5rem' }}>
+                                    <button onClick={() => submitReturn(order)} disabled={returnBusy || !returnReason.trim()} className="btn-primary" style={{ padding: '0.5rem 1.1rem', borderRadius: '10px', fontSize: '0.85rem', opacity: (returnBusy || !returnReason.trim()) ? 0.6 : 1 }}>
+                                      {returnBusy ? '...' : 'إرسال طلب الإرجاع'}
+                                    </button>
+                                    <button onClick={() => { setReturnFor(null); setReturnReason(''); }} style={{ padding: '0.5rem 1.1rem', borderRadius: '10px', fontSize: '0.85rem', background: 'none', border: '1px solid var(--glass-border)', color: 'var(--text-secondary)', cursor: 'pointer' }}>
+                                      إلغاء
+                                    </button>
+                                  </div>
+                                </div>
+                              ) : (
+                                <button onClick={() => { setReturnFor(order.id); setReturnReason(''); }}
+                                  style={{ padding: '0.45rem 1rem', borderRadius: '99px', fontSize: '0.82rem', fontWeight: 600, background: 'none', border: '1px solid var(--glass-border)', color: 'var(--text-secondary)', cursor: 'pointer', display: 'inline-flex', alignItems: 'center', gap: '6px' }}>
+                                  <i className="fa-solid fa-rotate-left" /> طلب إرجاع / استرداد
+                                </button>
+                              )}
+                            </div>
+                          )}
                         </div>
                       </div>
                     );
@@ -596,7 +939,7 @@ export default function ProfilePage() {
                 width: '72px',
                 height: '72px',
                 borderRadius: '50%',
-                background: 'linear-gradient(135deg, var(--accent-color) 0%, #7c3aed 100%)',
+                background: 'linear-gradient(135deg, #1a1a1a 0%, #4a4a4a 100%)',
                 display: 'flex',
                 alignItems: 'center',
                 justifyContent: 'center',

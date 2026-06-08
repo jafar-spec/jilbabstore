@@ -60,7 +60,7 @@ export default function AccessibilityWidget() {
         display: 'flex', alignItems: 'center', gap: '10px', width: '100%',
         padding: '0.7rem 0.9rem', borderRadius: '10px', cursor: 'pointer',
         border: active ? '2px solid var(--accent-color)' : '1px solid var(--border-color)',
-        background: active ? 'rgba(124,58,237,0.08)' : 'var(--bg-color)',
+        background: active ? 'var(--accent-soft)' : 'var(--bg-color)',
         color: 'var(--text-primary)', fontSize: '0.9rem', fontWeight: 600, textAlign: 'start'
       }}
     >

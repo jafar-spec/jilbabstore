@@ -46,7 +46,7 @@ export default function CartSidebar() {
               <div style={{ height: '6px', background: 'var(--border-color)', borderRadius: '99px', overflow: 'hidden' }}>
                 <div style={{
                   height: '100%', borderRadius: '99px',
-                  background: 'linear-gradient(90deg, var(--accent-color), #8b5cf6)',
+                  background: 'linear-gradient(90deg, #1a1a1a, #4a4a4a)',
                   width: `${progress}%`, transition: 'width 0.5s ease'
                 }} />
               </div>

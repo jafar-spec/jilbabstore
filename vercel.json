@@ -1,5 +1,9 @@
 {
   "framework": "nextjs",
   "buildCommand": "npm run build",
-  "installCommand": "npm install"
+  "installCommand": "npm install",
+  "crons": [
+    { "path": "/api/cron/restock", "schedule": "0 */3 * * *" },
+    { "path": "/api/cron/abandoned-cart", "schedule": "0 */6 * * *" }
+  ]
 }

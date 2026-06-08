@@ -5,12 +5,14 @@ import { useToast } from '@/context/ToastContext';
 import { useLanguage } from '@/context/LanguageContext';
 import Link from 'next/link';
 import Image from 'next/image';
-import { getProductById, getReviews } from '@/lib/db';
+import { getProductById, getReviews, requestBackInStock, getPage } from '@/lib/db';
+import { PAGE_DEFAULTS, resolvePage } from '@/lib/pageContent';
 import { auth } from '@/lib/firebase';
 import { onAuthStateChanged } from 'firebase/auth';
 import { useWishlist } from '@/context/WishlistContext';
 import { recordRecentlyViewed } from '@/components/RecentlyViewed';
 import { track, productItem } from '@/lib/analytics';
+import { localized } from '@/lib/localize';
 
 export default function ClientProductDetail({ initialProduct, initialReviews, relatedProducts }) {
   const { addToCart } = useCart();
@@ -29,6 +31,19 @@ export default function ClientProductDetail({ initialProduct, initialReviews, re
   const [reviews, setReviews] = useState(initialReviews || []);
   const [newReview, setNewReview] = useState({ rating: 5, text: '', name: '' });
   const [isSubmittingReview, setIsSubmittingReview] = useState(false);
+
+  // Back-in-stock ("notify me") state.
+  const [notifyContact, setNotifyContact] = useState('');
+  const [notifySent, setNotifySent] = useState(false);
+  const [notifyBusy, setNotifyBusy] = useState(false);
+
+  // Size guide modal.
+  const [showSizeGuide, setShowSizeGuide] = useState(false);
+  const [sizeGuide, setSizeGuide] = useState(PAGE_DEFAULTS.sizeguide);
+  const openSizeGuide = () => {
+    setShowSizeGuide(true);
+    getPage('sizeguide').then(d => { if (d) setSizeGuide({ ...PAGE_DEFAULTS.sizeguide, ...d }); }).catch(() => {});
+  };
 
   // Customer session (default app) — required to leave a verified review.
   const [customer, setCustomer] = useState(null);
@@ -121,6 +136,31 @@ export default function ClientProductDetail({ initialProduct, initialReviews, re
       showToast(t('addedToCart'), 'success');
   };
 
+  const handleNotifyMe = async (e) => {
+    e.preventDefault();
+    const contact = notifyContact.trim();
+    if (!contact) return;
+    const isEmail = contact.includes('@');
+    setNotifyBusy(true);
+    try {
+      await requestBackInStock({
+        productId: product.id,
+        productTitle: product.title,
+        sku: selectedVariant ? selectedVariant.sku : null,
+        size: selectedSize || '',
+        color: hasColors ? (selectedColor || '') : '',
+        email: isEmail ? contact : (customer?.email || ''),
+        phone: isEmail ? '' : contact,
+      });
+      setNotifySent(true);
+      showToast(t('notifyMeSuccess') || 'سنخطرك فور توفّر المنتج ✓', 'success');
+    } catch {
+      showToast(t('newsletterError') || 'حدث خطأ، حاول مرة أخرى', 'error');
+    } finally {
+      setNotifyBusy(false);
+    }
+  };
+
   const handleMouseMove = (e) => {
     const { left, top, width, height } = e.currentTarget.getBoundingClientRect();
     const x = ((e.pageX - left) / width) * 100;
@@ -180,7 +220,7 @@ export default function ClientProductDetail({ initialProduct, initialReviews, re
         <div style={{ maxWidth: '1200px', margin: '0 auto', marginBottom: '2rem', display: 'flex', gap: '0.5rem', fontSize: '0.9rem', color: 'var(--text-secondary)' }}>
           <Link href="/" style={{ textDecoration: 'none', color: 'var(--text-primary)' }}>{t('home')}</Link>
           <span>/</span>
-          <span>{product.title}</span>
+          <span>{localized(product, 'title', lang)}</span>
         </div>
 
         <div style={{ display: 'flex', gap: '4rem', flexWrap: 'wrap', maxWidth: '1200px', margin: '0 auto' }}>
@@ -204,10 +244,13 @@ export default function ClientProductDetail({ initialProduct, initialReviews, re
               width: '100%'
             }}
           >
-            <Image 
-              src={mainImage} 
-              alt={product.title} 
+            <Image
+              src={mainImage}
+              alt={product.title}
               fill
+              quality={95}
+              priority
+              sizes="(max-width: 768px) 100vw, 600px"
               style={{ objectFit: 'cover' }}
             />
             {/* Zoom Lens Overlay */}
@@ -231,12 +274,14 @@ export default function ClientProductDetail({ initialProduct, initialReviews, re
             <div style={{ display: 'flex', gap: '1rem', overflowX: 'auto', padding: '0.5rem 0' }}>
               {galleryImages.map((img, idx) => (
                 <div key={idx} style={{ position: 'relative', width: '80px', height: '80px', flexShrink: 0 }}>
-                  <Image 
-                    src={img} 
+                  <Image
+                    src={img}
                     alt={`${product.title} ${idx+1}`}
                     onClick={() => setMainImage(img)}
                     fill
-                    style={{ 
+                    quality={85}
+                    sizes="80px"
+                    style={{
                       objectFit: 'cover', 
                       borderRadius: '8px', 
                       cursor: 'pointer',
@@ -258,7 +303,7 @@ export default function ClientProductDetail({ initialProduct, initialReviews, re
             <div style={{ color: 'var(--accent-color)', fontSize: '0.9rem', marginBottom: '0.5rem', fontWeight: 'bold' }}>
               {t('storeName').toUpperCase()} OFFICIAL
             </div>
-            <h1 style={{ fontSize: '2.5rem', lineHeight: '1.2' }}>{product.title}</h1>
+            <h1 style={{ fontSize: '2.5rem', lineHeight: '1.2' }}>{localized(product, 'title', lang)}</h1>
             
             {/* Ratings */}
             <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginTop: '1rem' }}>
@@ -281,7 +326,7 @@ export default function ClientProductDetail({ initialProduct, initialReviews, re
 
           <div>
             <p style={{ color: 'var(--text-secondary)', lineHeight: '1.8' }}>
-              {product.description || t('heroSubtitle')}
+              {localized(product, 'description', lang) || t('heroSubtitle')}
             </p>
           </div>
 
@@ -322,7 +367,12 @@ export default function ClientProductDetail({ initialProduct, initialReviews, re
           {/* Size Selector */}
           {variantsForColor && variantsForColor.length > 0 && (
               <div>
-                  <h3 style={{ fontSize: '1.2rem', marginBottom: '1rem' }}>{t('chooseSize')}: {selectedSize && <span style={{fontWeight: 'normal', color: 'var(--text-secondary)'}}>{selectedSize}</span>}</h3>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '8px', marginBottom: '1rem' }}>
+                    <h3 style={{ fontSize: '1.2rem', margin: 0 }}>{t('chooseSize')}: {selectedSize && <span style={{fontWeight: 'normal', color: 'var(--text-secondary)'}}>{selectedSize}</span>}</h3>
+                    <button type="button" onClick={openSizeGuide} style={{ background: 'none', border: 'none', color: 'var(--accent-color)', cursor: 'pointer', fontSize: '0.9rem', fontWeight: 600, display: 'inline-flex', alignItems: 'center', gap: '6px', textDecoration: 'underline' }}>
+                      <i className="fa-solid fa-ruler" /> {t('sizeGuide') || 'دليل المقاسات'}
+                    </button>
+                  </div>
                   <div style={{ display: 'flex', gap: '10px', flexWrap: 'wrap' }}>
                       {variantsForColor.map(variant => {
                           const isOutOfStock = variant.stock <= 0;
@@ -385,7 +435,6 @@ export default function ClientProductDetail({ initialProduct, initialReviews, re
               >
                 <i className="fa-solid fa-cart-plus"></i> {selectedVariant?.stock === 0 ? t('soldOut') : t('addToCart')}
               </button>
-              
               <button 
                 onClick={() => toggleWishlist(product)}
                 style={{ width: '60px', height: '60px', borderRadius: '50%', background: 'var(--bg-color)', border: '1px solid var(--glass-border)', display: 'flex', justifyContent: 'center', alignItems: 'center', cursor: 'pointer', fontSize: '1.5rem', color: isInWishlist(product.id) ? '#e74c3c' : 'var(--text-secondary)', transition: 'all 0.3s' }}
@@ -393,7 +442,32 @@ export default function ClientProductDetail({ initialProduct, initialReviews, re
                 <i className={isInWishlist(product.id) ? "fa-solid fa-heart" : "fa-regular fa-heart"}></i>
               </button>
             </div>
-            
+
+            {/* Back-in-stock: notify me when the chosen variant is sold out */}
+            {selectedSize && selectedVariant && selectedVariant.stock === 0 && (
+              notifySent ? (
+                <div style={{ marginTop: '1.25rem', padding: '0.9rem 1rem', background: 'rgba(16,185,129,0.08)', border: '1px solid rgba(16,185,129,0.4)', borderRadius: '12px', color: '#059669', fontSize: '0.9rem', textAlign: 'center' }}>
+                  <i className="fa-solid fa-bell"></i> {t('notifyMeSuccess') || 'سنخطرك فور توفّر المنتج بهذا المقاس ✓'}
+                </div>
+              ) : (
+                <form onSubmit={handleNotifyMe} style={{ marginTop: '1.25rem', padding: '1rem', background: 'var(--bg-color)', border: '1px dashed var(--glass-border)', borderRadius: '12px' }}>
+                  <div style={{ fontSize: '0.9rem', marginBottom: '0.6rem', color: 'var(--text-primary)', fontWeight: 600 }}>
+                    <i className="fa-regular fa-bell"></i> {t('notifyMeTitle') || 'أعلمني عند توفّره'}
+                  </div>
+                  <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap' }}>
+                    <input
+                      type="text" dir="auto" value={notifyContact} onChange={(e) => setNotifyContact(e.target.value)}
+                      placeholder={t('notifyMePlaceholder') || 'بريدك الإلكتروني أو رقم جوالك'}
+                      style={{ flex: '1 1 200px', padding: '0.7rem 0.9rem', borderRadius: '10px', border: '1px solid var(--glass-border)', background: 'var(--surface-color)', color: 'var(--text-primary)', fontSize: '0.9rem' }}
+                    />
+                    <button type="submit" className="btn-primary" disabled={notifyBusy || !notifyContact.trim()} style={{ padding: '0.7rem 1.3rem', borderRadius: '10px', opacity: (notifyBusy || !notifyContact.trim()) ? 0.6 : 1 }}>
+                      {notifyBusy ? '...' : (t('notifyMeBtn') || 'أعلمني')}
+                    </button>
+                  </div>
+                </form>
+              )
+            )}
+
             <div style={{ marginTop: '2rem', paddingTop: '1.5rem', borderTop: '1px solid var(--glass-border)', display: 'flex', flexDirection: 'column', gap: '1rem', color: 'var(--text-secondary)', fontSize: '0.9rem' }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
                 <i className="fa-solid fa-truck-fast" style={{ fontSize: '1.2rem', color: 'var(--text-primary)', width: '24px' }}></i> 
@@ -532,6 +606,44 @@ export default function ClientProductDetail({ initialProduct, initialReviews, re
         )}
 
       </div>
+
+      {/* Sticky mobile add-to-cart bar */}
+      <div className="pdp-sticky-spacer" />
+      <div className="pdp-sticky">
+        <span className="pdp-price">{product.price} {t('price')}</span>
+        <button
+          className="btn-primary"
+          onClick={handleAddToCart}
+          disabled={selectedVariant?.stock === 0}
+        >
+          {selectedVariant?.stock === 0
+            ? t('soldOut')
+            : (product.variants?.length > 0 && !selectedSize ? t('chooseSize') : t('addToCart'))}
+        </button>
+      </div>
+
+      {/* Size guide modal */}
+      {showSizeGuide && (() => {
+        const sg = resolvePage(sizeGuide, lang);
+        return (
+          <div onClick={() => setShowSizeGuide(false)} style={{ position: 'fixed', inset: 0, zIndex: 4400, background: 'rgba(0,0,0,0.5)', backdropFilter: 'blur(3px)', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '1rem' }}>
+            <div onClick={e => e.stopPropagation()} style={{ position: 'relative', width: 'min(560px, 100%)', maxHeight: '85vh', overflowY: 'auto', background: 'var(--surface-color)', borderRadius: '16px', padding: '2rem 1.75rem', boxShadow: '0 24px 60px rgba(0,0,0,0.3)' }}>
+              <button onClick={() => setShowSizeGuide(false)} aria-label="إغلاق" style={{ position: 'absolute', top: '12px', insetInlineEnd: '14px', background: 'none', border: 'none', fontSize: '1.3rem', cursor: 'pointer', color: 'var(--text-secondary)' }}>
+                <i className="fa-solid fa-xmark"></i>
+              </button>
+              <h2 style={{ marginTop: 0, marginBottom: '1rem', fontSize: '1.4rem' }}><i className="fa-solid fa-ruler" style={{ marginInlineEnd: '8px', color: 'var(--accent-color)' }} />{sg.title}</h2>
+              {(sg.blocks || []).map((b, i) => (
+                <div key={i} style={{ marginBottom: '1rem' }}>
+                  {b.heading && <h3 style={{ fontSize: '1rem', margin: '0 0 0.4rem' }}>{b.heading}</h3>}
+                  {String(b.body || '').split('\n').map(l => l.trim()).filter(Boolean).map((p, j) => (
+                    <p key={j} style={{ margin: '0 0 0.3rem', color: 'var(--text-secondary)', fontSize: '0.92rem' }}>{p}</p>
+                  ))}
+                </div>
+              ))}
+            </div>
+          </div>
+        );
+      })()}
     </main>
   );
 }

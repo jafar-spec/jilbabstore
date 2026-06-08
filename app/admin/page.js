@@ -1,5 +1,5 @@
 "use client";
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useMemo } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import jsPDF from 'jspdf';
@@ -19,6 +19,7 @@ import {
   setVariantStock, adjustVariantStock, getStockMovements,
   getPurchaseOrders, createPurchaseOrder, receivePurchaseOrder, deletePurchaseOrder,
   getPage, updatePage,
+  getReturnRequests,
 } from '@/lib/db';
 import AdminMap from '@/components/AdminMap';
 import { useAuth } from '@/context/AuthContext';
@@ -43,6 +44,10 @@ export default function AdminDashboard() {
   const fileInputRef = useRef(null);
   
   const [inventorySearch, setInventorySearch] = useState('');
+  const [inventorySort, setInventorySort] = useState('name');
+  const [invColor, setInvColor] = useState('');
+  const [invSize, setInvSize] = useState('');
+  const [invStatus, setInvStatus] = useState('');
   const [selectedOrder, setSelectedOrder] = useState(null);
 
   // NEWSLETTER STATE
@@ -59,7 +64,7 @@ export default function AdminDashboard() {
 
   // PROMO CODES STATE
   const [promoCodes, setPromoCodes] = useState([]);
-  const [newPromo, setNewPromo] = useState({ code: '', discountValue: 0, type: 'fixed', usageLimit: '', perCustomerLimit: '', firstOrderOnly: false });
+  const [newPromo, setNewPromo] = useState({ code: '', discountValue: 0, type: 'fixed', usageLimit: '', perCustomerLimit: '', firstOrderOnly: false, minSubtotal: '' });
 
   // SUPPORT TICKETS STATE
   const [tickets, setTickets] = useState([]);
@@ -80,11 +85,17 @@ export default function AdminDashboard() {
   // STOCK MOVEMENTS + PURCHASE ORDERS STATE
   const [stockMovements, setStockMovements] = useState([]);
   const [purchaseOrders, setPurchaseOrders] = useState([]);
-  const [poDraft, setPoDraft] = useState({ supplier: '', lines: [] });
+  const [returnRequests, setReturnRequests] = useState([]);
+  const [refundInputs, setRefundInputs] = useState({}); // { [returnId]: amountStr } — blank = full
+  const [reportRange, setReportRange] = useState('30d'); // '7d'|'30d'|'90d'|'all'|'custom'
+  const [reportFrom, setReportFrom] = useState('');
+  const [reportTo, setReportTo] = useState('');
+  const [poDraft, setPoDraft] = useState({ supplier: '', expectedDate: '', note: '', lines: [] });
 
   // EDITABLE PAGES STATE
   const [activePageSlug, setActivePageSlug] = useState(null);
-  const [pageDraft, setPageDraft] = useState(null);
+  const [pageDraft, setPageDraft] = useState(null); // full object: { title, blocks, he:{ title, blocks } }
+  const [pageLang, setPageLang] = useState('ar');   // which language variant is being edited
   const [pageSaving, setPageSaving] = useState(false);
 
 
@@ -103,9 +114,17 @@ export default function AdminDashboard() {
     logoUrl: '',
     heroImgLeft: '',
     heroImgMiddle: '',
-    heroImgRight: ''
+    heroImgRight: '',
+    // Legal identity for tax invoices (חשבונית מס/קבלה)
+    legalBusinessName: '',
+    businessTaxId: '',
+    businessType: 'osek_morsheh', // 'osek_morsheh' | 'osek_patur'
+    vatRate: 18,
+    businessAddress: '',
+    invoicePrefix: ''
   });
   const [isSavingCms, setIsSavingCms] = useState(false);
+  const [adImgUploading, setAdImgUploading] = useState(null);
 
   // CUSTOMER & INTERACTIVE ANALYTICS STATE
   const [searchCustomerQuery, setSearchCustomerQuery] = useState('');
@@ -116,11 +135,14 @@ export default function AdminDashboard() {
   // NEW PRODUCT FORM STATE
   const [newProduct, setNewProduct] = useState({
     title: '',
+    title_en: '', title_he: '',
     price: '',
     images: [],
     description: '',
+    description_en: '', description_he: '',
     sectionId: '',
     subsectionId: '',
+    subSubId: '',
     category: '',
     lowStockThreshold: 5,
     colors: [], // Array of { name, hex, images: [] }
@@ -239,32 +261,50 @@ export default function AdminDashboard() {
   };
 
   // --- EDITABLE PAGES (About/FAQ/Shipping/Contact/Privacy/Returns/Terms) ---
+  // Read/write the active-language slice of the page draft. Arabic is stored at
+  // the top level ({title, blocks}); Hebrew lives under a `he` sub-object.
+  const pageSlice = (d, lang) => lang === 'he'
+    ? (d?.he || { title: '', blocks: [] })
+    : { title: d?.title || '', blocks: d?.blocks || [] };
+  const setPageSlice = (lang, updater) => setPageDraft(d => {
+    const cur = pageSlice(d, lang);
+    const next = updater(cur);
+    return lang === 'he' ? { ...d, he: next } : { ...d, title: next.title, blocks: next.blocks };
+  });
+
   const openPageEditor = async (slug) => {
     setActivePageSlug(slug);
     setPageDraft(null);
+    setPageLang('ar');
+    const def = PAGE_DEFAULTS[slug] || { title: '', blocks: [] };
     try {
-      const data = (await getPage(slug)) || PAGE_DEFAULTS[slug] || { title: '', blocks: [] };
-      setPageDraft(JSON.parse(JSON.stringify({ title: data.title || '', blocks: data.blocks || [] })));
+      const stored = await getPage(slug);
+      // Merge over defaults so the Hebrew default survives until edited+saved.
+      const data = stored ? { ...def, ...stored } : def;
+      setPageDraft(JSON.parse(JSON.stringify(data)));
     } catch (e) {
-      setPageDraft(JSON.parse(JSON.stringify(PAGE_DEFAULTS[slug] || { title: '', blocks: [] })));
+      setPageDraft(JSON.parse(JSON.stringify(def)));
     }
   };
-  const setPageTitle = (title) => setPageDraft(d => ({ ...d, title }));
-  const setPageBlock = (i, patch) => setPageDraft(d => ({ ...d, blocks: d.blocks.map((b, idx) => idx === i ? { ...b, ...patch } : b) }));
-  const addPageBlock = () => setPageDraft(d => ({ ...d, blocks: [...(d.blocks || []), { heading: '', body: '' }] }));
-  const removePageBlock = (i) => setPageDraft(d => ({ ...d, blocks: d.blocks.filter((_, idx) => idx !== i) }));
-  const movePageBlock = (i, dir) => setPageDraft(d => {
-    const blocks = [...d.blocks];
+  const setPageTitle = (title) => setPageSlice(pageLang, s => ({ ...s, title }));
+  const setPageBlock = (i, patch) => setPageSlice(pageLang, s => ({ ...s, blocks: s.blocks.map((b, idx) => idx === i ? { ...b, ...patch } : b) }));
+  const addPageBlock = () => setPageSlice(pageLang, s => ({ ...s, blocks: [...(s.blocks || []), { heading: '', body: '' }] }));
+  const removePageBlock = (i) => setPageSlice(pageLang, s => ({ ...s, blocks: s.blocks.filter((_, idx) => idx !== i) }));
+  const movePageBlock = (i, dir) => setPageSlice(pageLang, s => {
+    const blocks = [...s.blocks];
     const j = i + dir;
-    if (j < 0 || j >= blocks.length) return d;
+    if (j < 0 || j >= blocks.length) return s;
     [blocks[i], blocks[j]] = [blocks[j], blocks[i]];
-    return { ...d, blocks };
+    return { ...s, blocks };
   });
   const savePage = async () => {
     if (!activePageSlug || !pageDraft) return;
     setPageSaving(true);
     try {
-      await updatePage(activePageSlug, { title: pageDraft.title, blocks: pageDraft.blocks });
+      // Persist the whole object (Arabic base + Hebrew variant).
+      const payload = { title: pageDraft.title || '', blocks: pageDraft.blocks || [] };
+      if (pageDraft.he) payload.he = pageDraft.he;
+      await updatePage(activePageSlug, payload);
       showToast('تم حفظ الصفحة بنجاح', 'success');
     } catch (e) {
       console.error(e);
@@ -303,8 +343,81 @@ export default function AdminDashboard() {
     try { setPurchaseOrders(await getPurchaseOrders()); }
     catch (e) { console.error(e); showToast('فشل تحميل أوامر التوريد', 'error'); }
   };
+  const loadReturns = async () => {
+    try { setReturnRequests(await getReturnRequests()); }
+    catch (e) { console.error(e); showToast('فشل تحميل طلبات الإرجاع', 'error'); }
+  };
+  // Return workflow (server-side, transactional + audited):
+  //   approve  → mark approved (awaiting goods back)
+  //   reject   → decline
+  //   complete → restock items (idempotent) + record the refund + order → مرتجع
+  const decideReturn = async (reqId, action, orderId, refundAmount) => {
+    try {
+      const token = await user.getIdToken();
+      const res = await fetch('/api/returns/process', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+        body: JSON.stringify({ returnId: reqId, action, refundAmount }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) { showToast(data.error || 'فشل تحديث طلب الإرجاع', 'error'); return; }
+      const newStatus = data.status || (action === 'reject' ? 'rejected' : action === 'approve' ? 'approved' : 'done');
+      setReturnRequests(prev => prev.map(r => r.id === reqId ? { ...r, status: newStatus, refundAmount: data.refundAmount ?? r.refundAmount } : r));
+      if (action === 'complete') {
+        setOrders(prev => prev.map(o => o.id === orderId ? { ...o, status: 'مرتجع', stockState: 'returned' } : o));
+        getProducts().then(setProducts).catch(() => {});
+      }
+      showToast(
+        action === 'reject' ? 'تم رفض الطلب'
+          : action === 'approve' ? 'تمت الموافقة على الإرجاع'
+            : `تم الاسترداد ₪${(Number(data.refundAmount) || 0).toFixed(2)} وإرجاع المخزون`,
+        'success'
+      );
+    } catch (e) { console.error(e); showToast('فشل تحديث طلب الإرجاع', 'error'); }
+  };
 
-  const addPoLine = () => setPoDraft(d => ({ ...d, lines: [...d.lines, { productId: '', sku: '', qty: 1 }] }));
+  // Clear a delivery issue flag once the operator has handled it.
+  const resolveDeliveryIssue = async (orderId) => {
+    try {
+      await updateOrderDoc(orderId, { hasDeliveryIssue: false, issueResolvedAt: new Date().toISOString() });
+      setOrders(prev => prev.map(o => o.id === orderId ? { ...o, hasDeliveryIssue: false } : o));
+      showToast('تم وضع علامة "تم الحل" على البلاغ', 'success');
+    } catch (e) { console.error(e); showToast('فشل تحديث البلاغ', 'error'); }
+  };
+
+  // Printable packing slip (pick list) — items, quantities, address; no prices.
+  const printPackingSlip = (order) => {
+    const esc = (s) => String(s ?? '').replace(/[&<>]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;' }[c]));
+    const a = order.shipping || order.customerInfo || {};
+    const addr = [a.city, a.neighborhood, a.street, a.address].filter(Boolean).join('، ');
+    const rows = (order.items || []).map(it => `
+      <tr>
+        <td style="padding:8px 6px;border-bottom:1px solid #e5e5e5;">☐ ${esc(it.title)}${it.selectedColor ? ` — ${esc(it.selectedColor)}` : ''}${it.selectedSize && it.selectedSize !== 'عام' ? ` (${esc(it.selectedSize)})` : ''}${it.sku ? `<div style="font-size:11px;color:#888;">SKU: ${esc(it.sku)}</div>` : ''}</td>
+        <td style="padding:8px 6px;border-bottom:1px solid #e5e5e5;text-align:center;font-weight:700;font-size:1.1rem;">${it.quantity}</td>
+      </tr>`).join('');
+    const num = String(order.id).slice(0, 8).toUpperCase();
+    const html = `<!doctype html><html lang="ar" dir="rtl"><head><meta charset="utf-8"/><title>قائمة تجهيز ${num}</title>
+      <style>body{font-family:Arial,sans-serif;color:#111;max-width:760px;margin:0 auto;padding:24px;}
+      h1{font-size:1.5rem;margin:0 0 4px;} .muted{color:#666;font-size:.9rem;}
+      table{width:100%;border-collapse:collapse;margin-top:16px;} th{text-align:right;border-bottom:2px solid #111;padding:8px 6px;font-size:.9rem;}
+      .box{border:1px solid #e5e5e5;border-radius:8px;padding:12px 14px;margin-top:14px;font-size:.95rem;line-height:1.7;}
+      .print{margin:18px 0;text-align:center;} @media print{.print{display:none}body{padding:0}}</style></head><body>
+      <div style="display:flex;justify-content:space-between;align-items:flex-start;border-bottom:2px solid #111;padding-bottom:10px;">
+        <div><h1>قائمة تجهيز الطلب</h1><div class="muted">Packing Slip</div></div>
+        <div style="text-align:left;"><strong>#${num}</strong><br/><span class="muted">${new Date(order.date || order.createdAt || Date.now()).toLocaleDateString('ar-EG')}</span></div>
+      </div>
+      <div class="box"><strong>المستلم:</strong> ${esc(a.fullName || '—')}<br/><strong>الهاتف:</strong> ${esc(a.phone || a.phone1 || '—')}<br/><strong>العنوان:</strong> ${esc(addr || '—')}${a.notes ? `<br/><strong>ملاحظات:</strong> ${esc(a.notes)}` : ''}</div>
+      <table><thead><tr><th>المنتج</th><th style="text-align:center;">الكمية</th></tr></thead><tbody>${rows}</tbody></table>
+      <p class="muted" style="margin-top:18px;">طريقة الدفع: ${order.paymentMethod === 'cash' ? 'الدفع عند الاستلام 💵' : order.paymentMethod === 'card' ? 'مدفوع (بطاقة)' : 'PayPal'}${order.paymentMethod === 'cash' ? ` — للتحصيل: ₪${Number(order.total || 0).toFixed(2)}` : ''}</p>
+      <div class="print"><button onclick="window.print()">🖨️ طباعة</button></div>
+      <script>window.onload=function(){setTimeout(function(){window.print()},300)}</script>
+      </body></html>`;
+    const w = window.open('', '_blank');
+    if (w) { w.document.write(html); w.document.close(); }
+    else showToast('يرجى السماح بالنوافذ المنبثقة للطباعة', 'error');
+  };
+
+  const addPoLine = () => setPoDraft(d => ({ ...d, lines: [...d.lines, { productId: '', sku: '', qty: 1, cost: '' }] }));
   const updatePoLine = (i, patch) => setPoDraft(d => ({ ...d, lines: d.lines.map((l, idx) => idx === i ? { ...l, ...patch } : l) }));
   const removePoLine = (i) => setPoDraft(d => ({ ...d, lines: d.lines.filter((_, idx) => idx !== i) }));
 
@@ -313,9 +426,14 @@ export default function AdminDashboard() {
     const lines = poDraft.lines.filter(l => l.productId && l.sku && Number(l.qty) > 0);
     if (lines.length === 0) { showToast('أضف صنفاً واحداً على الأقل', 'error'); return; }
     try {
-      await createPurchaseOrder({ supplier: poDraft.supplier || '', lines: lines.map(l => ({ ...l, qty: Number(l.qty) })) });
+      await createPurchaseOrder({
+        supplier: poDraft.supplier || '',
+        expectedDate: poDraft.expectedDate || '',
+        note: poDraft.note || '',
+        lines: lines.map(l => ({ productId: l.productId, sku: l.sku, qty: Number(l.qty), cost: Number(l.cost) || 0 })),
+      });
       showToast('تم إنشاء أمر التوريد', 'success');
-      setPoDraft({ supplier: '', lines: [] });
+      setPoDraft({ supplier: '', expectedDate: '', note: '', lines: [] });
       loadPurchaseOrders();
     } catch (err) { console.error(err); showToast('فشل إنشاء أمر التوريد', 'error'); }
   };
@@ -610,7 +728,7 @@ export default function AdminDashboard() {
     const section = sections.find(s => s.id === prod.sectionId);
     const sub = (section?.subsections || []).find(ss => ss.id === prod.subsectionId);
     const parts = [
-      prod.title, prod.category, prod.description,
+      prod.title, prod.title_en, prod.title_he, prod.category, prod.description,
       section?.title_en, section?.title_ar,
       sub?.name_en, sub?.name_ar,
       ...(prod.colors || []).map(c => c.name),
@@ -623,7 +741,7 @@ export default function AdminDashboard() {
 
   const resetProductForm = () => {
     setEditingProductId(null);
-    setNewProduct({ title: '', price: '', images: [], description: '', sectionId: sections[0]?.id || '', subsectionId: '', category: '', lowStockThreshold: 5, colors: [], variants: [] });
+    setNewProduct({ title: '', title_en: '', title_he: '', price: '', images: [], description: '', description_en: '', description_he: '', sectionId: sections[0]?.id || '', subsectionId: '', subSubId: '', category: '', lowStockThreshold: 5, colors: [], variants: [] });
     if (fileInputRef.current) fileInputRef.current.value = "";
   };
 
@@ -631,11 +749,14 @@ export default function AdminDashboard() {
     setEditingProductId(prod.id);
     setNewProduct({
       title: prod.title || '',
+      title_en: prod.title_en || '', title_he: prod.title_he || '',
       price: prod.price ?? '',
       images: prod.images || [],
       description: prod.description || '',
+      description_en: prod.description_en || '', description_he: prod.description_he || '',
       sectionId: prod.sectionId || (sections[0]?.id || ''),
       subsectionId: prod.subsectionId || '',
+      subSubId: prod.subSubId || '',
       category: prod.category || '',
       lowStockThreshold: prod.lowStockThreshold ?? 5,
       colors: (prod.colors || []).map(c => ({ name: c.name || '', hex: c.hex || '#000000', images: c.images || [] })),
@@ -680,11 +801,16 @@ export default function AdminDashboard() {
 
       const productDoc = {
         title: newProduct.title,
+        title_en: (newProduct.title_en || '').trim(),
+        title_he: (newProduct.title_he || '').trim(),
         price: parseFloat(newProduct.price),
         images: newProduct.images,
         description: newProduct.description,
+        description_en: (newProduct.description_en || '').trim(),
+        description_he: (newProduct.description_he || '').trim(),
         sectionId: newProduct.sectionId || (sections[0]?.id || ''),
         subsectionId: newProduct.subsectionId || '',
+        subSubId: newProduct.subsectionId ? (newProduct.subSubId || '') : '',
         category: newProduct.category || '',
         lowStockThreshold: Number(newProduct.lowStockThreshold) || 5,
         isNewArrival: true,
@@ -1075,10 +1201,28 @@ export default function AdminDashboard() {
       : [{ ...p, baseId: p.id, stock: Number(p.stock) || 0, reserved: 0, available: Number(p.stock) || 0, threshold: Number(p.lowStockThreshold) || 5 }]
   );
 
-  const filteredInventory = allInventoryItems.filter(p => 
-    p.title?.toLowerCase().includes(inventorySearch.toLowerCase()) || 
-    p.sku?.toLowerCase().includes(inventorySearch.toLowerCase())
-  );
+  const invColorOpts = [...new Set(allInventoryItems.map(i => i.color).filter(Boolean))];
+  const invSizeOpts = [...new Set(allInventoryItems.map(i => i.size).filter(Boolean))];
+  const filteredInventory = allInventoryItems.filter(p => {
+    const q = inventorySearch.toLowerCase();
+    const matchQ = !q || p.title?.toLowerCase().includes(q) || p.sku?.toLowerCase().includes(q) || (p.color || '').toLowerCase().includes(q) || (p.size || '').toLowerCase().includes(q);
+    const matchColor = !invColor || p.color === invColor;
+    const matchSize = !invSize || p.size === invSize;
+    const matchStatus = !invStatus || (invStatus === 'out' ? p.available <= 0 : invStatus === 'low' ? (p.available > 0 && p.available <= p.threshold) : p.available > p.threshold);
+    return matchQ && matchColor && matchSize && matchStatus;
+  });
+
+  // Bundle variants under their parent product (less chaotic than a flat list).
+  const inventoryGroups = (() => {
+    const m = new Map();
+    filteredInventory.forEach(it => {
+      if (!m.has(it.baseId)) m.set(it.baseId, { baseId: it.baseId, title: it.title, image: (it.images && it.images[0]) || it.image, price: it.price, items: [] });
+      m.get(it.baseId).items.push(it);
+    });
+    const arr = [...m.values()].map(g => ({ ...g, totalStock: g.items.reduce((s, i) => s + (i.stock || 0), 0), totalAvail: g.items.reduce((s, i) => s + (i.available || 0), 0) }));
+    arr.sort((a, b) => inventorySort === 'stock_asc' ? a.totalAvail - b.totalAvail : inventorySort === 'stock_desc' ? b.totalAvail - a.totalAvail : (a.title || '').localeCompare(b.title || '', 'ar'));
+    return arr;
+  })();
 
   const filteredSubscribers = subscribers.filter(s => 
     s.email.toLowerCase().includes(newsletterSearch.toLowerCase())
@@ -1212,6 +1356,73 @@ export default function AdminDashboard() {
   const pendingOrdersCount = pendingOrders.length;
   const bestSellers = realBestSellers;
 
+  // ─── Sales report (date-range scoped, computed from loaded orders) ─────────
+  const orderDate = (o) => new Date(o.date || o.createdAt || 0);
+  const salesReport = useMemo(() => {
+    const now = new Date();
+    let from = new Date(0);
+    if (reportRange === '7d') from = new Date(now.getTime() - 7 * 864e5);
+    else if (reportRange === '30d') from = new Date(now.getTime() - 30 * 864e5);
+    else if (reportRange === '90d') from = new Date(now.getTime() - 90 * 864e5);
+    else if (reportRange === 'custom' && reportFrom) from = new Date(reportFrom);
+    const to = reportRange === 'custom' && reportTo ? new Date(reportTo + 'T23:59:59') : now;
+
+    const inRange = orders.filter(o => { const d = orderDate(o); return d >= from && d <= to; });
+    const isCancelled = (o) => o.status === 'ملغي';
+    const isReturned = (o) => o.status === 'مرتجع';
+    const counted = inRange.filter(o => !isCancelled(o)); // exclude cancelled from revenue
+
+    const revenue = counted.filter(o => !isReturned(o)).reduce((a, o) => a + (Number(o.total) || 0), 0);
+    const refunds = inRange.reduce((a, o) => a + (Number(o.refund?.amount) || 0), 0);
+    const orderCount = counted.length;
+    const itemsSold = counted.reduce((a, o) => a + (o.items || []).reduce((s, it) => s + (Number(it.quantity) || 0), 0), 0);
+
+    const byStatus = {}; const byPayment = {}; const byProduct = {}; const byDay = {};
+    inRange.forEach(o => { byStatus[o.status] = (byStatus[o.status] || 0) + 1; });
+    counted.forEach(o => {
+      const pm = o.paymentMethod || 'cash';
+      byPayment[pm] = (byPayment[pm] || 0) + (Number(o.total) || 0);
+      const day = orderDate(o).toISOString().slice(0, 10);
+      byDay[day] = (byDay[day] || 0) + (Number(o.total) || 0);
+      (o.items || []).forEach(it => {
+        const key = it.title || it.id;
+        const cur = byProduct[key] || { title: it.title || key, qty: 0, revenue: 0 };
+        cur.qty += Number(it.quantity) || 0;
+        cur.revenue += (Number(it.price) || 0) * (Number(it.quantity) || 0);
+        byProduct[key] = cur;
+      });
+    });
+    const topProducts = Object.values(byProduct).sort((a, b) => b.revenue - a.revenue).slice(0, 10);
+    const days = Object.keys(byDay).sort();
+    const trend = days.map(d => ({ day: d, value: byDay[d] }));
+
+    return {
+      from, to, revenue, refunds, net: revenue - refunds, orderCount,
+      aov: orderCount ? revenue / orderCount : 0, itemsSold,
+      cancelled: inRange.filter(isCancelled).length, returned: inRange.filter(isReturned).length,
+      byStatus, byPayment, topProducts, trend, rows: inRange,
+    };
+  }, [orders, reportRange, reportFrom, reportTo]);
+
+  // Download the in-range orders as a CSV for accounting.
+  const exportSalesCsv = () => {
+    const esc = (v) => `"${String(v ?? '').replace(/"/g, '""')}"`;
+    const header = ['OrderID', 'Date', 'Status', 'Payment', 'Customer', 'City', 'Items', 'Subtotal', 'Discount', 'Shipping', 'Total', 'Refund'];
+    const lines = salesReport.rows.map(o => [
+      o.id, orderDate(o).toISOString(), o.status, o.paymentMethod || '',
+      o.customerInfo?.fullName || '', o.customerInfo?.city || '',
+      (o.items || []).reduce((s, it) => s + (Number(it.quantity) || 0), 0),
+      Number(o.subtotal) || 0, Number(o.discount) || 0, Number(o.shipping) || 0,
+      Number(o.total) || 0, Number(o.refund?.amount) || 0,
+    ].map(esc).join(','));
+    const csv = [header.join(','), ...lines].join('\n');
+    const blob = new Blob(['﻿' + csv], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url; a.download = `sales_${reportRange}_${new Date().toISOString().slice(0, 10)}.csv`;
+    a.click(); URL.revokeObjectURL(url);
+  };
+
   if (!role || activeTab === 'loading') {
     return <div style={{ display: 'flex', minHeight: '100vh', justifyContent: 'center', alignItems: 'center', background: 'var(--bg-color)' }}>جاري التحقق من الصلاحيات...</div>;
   }
@@ -1230,6 +1441,9 @@ export default function AdminDashboard() {
             <>
               <button onClick={() => setActiveTab('dashboard')} style={navButtonStyle(activeTab === 'dashboard')}>
                 <i className="fa-solid fa-chart-line" style={{ marginLeft: '10px' }}></i> لوحة التحكم
+              </button>
+              <button onClick={() => setActiveTab('reports')} style={navButtonStyle(activeTab === 'reports')}>
+                <i className="fa-solid fa-chart-pie" style={{ marginLeft: '10px' }}></i> التقارير
               </button>
               <button onClick={() => setActiveTab('orders')} style={navButtonStyle(activeTab === 'orders')}>
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', width: '100%' }}>
@@ -1277,6 +1491,17 @@ export default function AdminDashboard() {
               <button onClick={() => setActiveTab('customers')} style={navButtonStyle(activeTab === 'customers')}>
                 <i className="fa-solid fa-users" style={{ marginLeft: '10px' }}></i> قاعدة العملاء والمشتريات
               </button>
+              <button onClick={() => { setActiveTab('returns'); loadReturns(); }} style={navButtonStyle(activeTab === 'returns')}>
+                <i className="fa-solid fa-rotate-left" style={{ marginLeft: '10px' }}></i> طلبات الإرجاع
+              </button>
+              <button onClick={() => setActiveTab('issues')} style={navButtonStyle(activeTab === 'issues')}>
+                <i className="fa-solid fa-triangle-exclamation" style={{ marginLeft: '10px' }}></i> بلاغات التوصيل
+                {orders.filter(o => o.hasDeliveryIssue).length > 0 && (
+                  <span style={{ background: '#e67e22', color: '#fff', borderRadius: '999px', padding: '0 7px', fontSize: '0.72rem', fontWeight: 700, marginInlineStart: '8px' }}>
+                    {orders.filter(o => o.hasDeliveryIssue).length}
+                  </span>
+                )}
+              </button>
               <button onClick={() => { setActiveTab('couriers'); fetchCouriers(); }} style={navButtonStyle(activeTab === 'couriers')}>
                 <i className="fa-solid fa-truck-fast" style={{ marginLeft: '10px' }}></i> المندوبون
               </button>
@@ -1308,6 +1533,7 @@ export default function AdminDashboard() {
         <header className="admin-header">
           <h1 style={{ fontSize: '2rem', color: 'var(--text-primary)' }}>
              {activeTab === 'dashboard' ? 'التحليلات والمبيعات (Analytics)' :
+              activeTab === 'reports' ? 'التقارير والمبيعات (Reports)' :
               activeTab === 'sections' ? 'أقسام المتجر' :
               activeTab === 'products' ? 'إضافة منتج الجديد' : 
               activeTab === 'inventory' ? 'إدارة مخزون المنتجات' : 
@@ -1346,6 +1572,105 @@ export default function AdminDashboard() {
         ) : (
           <div>
             {/* DASHBOARD TAB */}
+            {activeTab === 'reports' && role === 'operator' && (() => {
+              const r = salesReport;
+              const maxTrend = Math.max(1, ...r.trend.map(t => t.value));
+              const PM_LABEL = { cash: 'الدفع عند الاستلام', card: 'بطاقة', paypal: 'PayPal' };
+              const rangeBtn = (key, label) => (
+                <button onClick={() => setReportRange(key)} style={{ padding: '0.45rem 1rem', borderRadius: '99px', border: `1.5px solid ${reportRange === key ? 'var(--accent-color)' : 'var(--glass-border)'}`, background: reportRange === key ? 'var(--accent-color)' : 'transparent', color: reportRange === key ? '#fff' : 'var(--text-secondary)', cursor: 'pointer', fontWeight: 600, fontSize: '0.85rem' }}>{label}</button>
+              );
+              const kpi = (label, value, color) => (
+                <div style={{ background: 'rgba(44,43,41,0.03)', border: '1px solid var(--glass-border)', padding: '1.25rem', borderRadius: '16px' }}>
+                  <span style={{ fontSize: '0.8rem', color: 'var(--text-secondary)', display: 'block', marginBottom: '0.4rem' }}>{label}</span>
+                  <strong style={{ fontSize: '1.5rem', color: color || 'var(--text-primary)', fontWeight: 700 }}>{value}</strong>
+                </div>
+              );
+              return (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '1.75rem' }}>
+                  {/* Range controls */}
+                  <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap', alignItems: 'center' }}>
+                    {rangeBtn('7d', 'آخر ٧ أيام')}{rangeBtn('30d', 'آخر ٣٠ يوم')}{rangeBtn('90d', 'آخر ٩٠ يوم')}{rangeBtn('all', 'الكل')}{rangeBtn('custom', 'مخصص')}
+                    {reportRange === 'custom' && (
+                      <span style={{ display: 'inline-flex', gap: '0.4rem', alignItems: 'center' }}>
+                        <input type="date" value={reportFrom} onChange={e => setReportFrom(e.target.value)} style={{ padding: '0.4rem', borderRadius: '8px', border: '1px solid var(--border-color)', background: 'var(--bg-color)', color: 'var(--text-primary)' }} />
+                        <span style={{ color: 'var(--text-secondary)' }}>→</span>
+                        <input type="date" value={reportTo} onChange={e => setReportTo(e.target.value)} style={{ padding: '0.4rem', borderRadius: '8px', border: '1px solid var(--border-color)', background: 'var(--bg-color)', color: 'var(--text-primary)' }} />
+                      </span>
+                    )}
+                    <button onClick={exportSalesCsv} style={{ marginInlineStart: 'auto', padding: '0.5rem 1.1rem', borderRadius: '10px', border: '1px solid var(--accent-color)', background: 'transparent', color: 'var(--accent-color)', cursor: 'pointer', fontWeight: 700, fontSize: '0.85rem' }}>
+                      <i className="fa-solid fa-file-csv" style={{ marginInlineEnd: '6px' }}></i> تصدير CSV
+                    </button>
+                  </div>
+
+                  {/* KPIs */}
+                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: '1rem' }}>
+                    {kpi('صافي الإيرادات', `₪${r.net.toFixed(2)}`, 'var(--accent-color)')}
+                    {kpi('إجمالي المبيعات', `₪${r.revenue.toFixed(2)}`)}
+                    {kpi('الطلبات', r.orderCount)}
+                    {kpi('متوسط الطلب (AOV)', `₪${r.aov.toFixed(2)}`)}
+                    {kpi('القطع المُباعة', r.itemsSold)}
+                    {kpi('المُرتجعات', `₪${r.refunds.toFixed(2)}`, '#dc2626')}
+                    {kpi('طلبات ملغاة', r.cancelled, '#6b7280')}
+                    {kpi('طلبات مرتجعة', r.returned, '#a21caf')}
+                  </div>
+
+                  {/* Revenue trend */}
+                  <div style={{ background: 'var(--surface-color)', border: '1px solid var(--glass-border)', borderRadius: '16px', padding: '1.25rem 1.5rem' }}>
+                    <h3 style={{ marginTop: 0, fontSize: '1rem' }}><i className="fa-solid fa-chart-column" style={{ color: 'var(--accent-color)', marginInlineEnd: '8px' }}></i>الإيرادات اليومية</h3>
+                    {r.trend.length === 0 ? (
+                      <p style={{ color: 'var(--text-secondary)' }}>لا توجد بيانات في هذه الفترة.</p>
+                    ) : (
+                      <div style={{ display: 'flex', alignItems: 'flex-end', gap: '4px', height: '140px', overflowX: 'auto', paddingTop: '0.5rem' }}>
+                        {r.trend.map(t => (
+                          <div key={t.day} title={`${t.day}: ₪${t.value.toFixed(2)}`} style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '4px', minWidth: '18px' }}>
+                            <div style={{ width: '14px', height: `${Math.max(3, (t.value / maxTrend) * 110)}px`, background: 'var(--accent-color)', borderRadius: '3px 3px 0 0', opacity: 0.85 }}></div>
+                            <span style={{ fontSize: '0.6rem', color: 'var(--text-secondary)', writingMode: 'vertical-rl' }}>{t.day.slice(5)}</span>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+
+                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: '1.25rem' }}>
+                    {/* Top products */}
+                    <div style={{ background: 'var(--surface-color)', border: '1px solid var(--glass-border)', borderRadius: '16px', padding: '1.25rem 1.5rem' }}>
+                      <h3 style={{ marginTop: 0, fontSize: '1rem' }}><i className="fa-solid fa-trophy" style={{ color: '#d97706', marginInlineEnd: '8px' }}></i>المنتجات الأكثر مبيعاً</h3>
+                      {r.topProducts.length === 0 ? <p style={{ color: 'var(--text-secondary)' }}>—</p> : (
+                        <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.85rem' }}>
+                          <thead><tr style={{ color: 'var(--text-secondary)', textAlign: 'right' }}><th style={{ padding: '4px' }}>المنتج</th><th style={{ padding: '4px' }}>الكمية</th><th style={{ padding: '4px' }}>الإيراد</th></tr></thead>
+                          <tbody>
+                            {r.topProducts.map((p, i) => (
+                              <tr key={i} style={{ borderTop: '1px solid var(--glass-border)' }}>
+                                <td style={{ padding: '6px 4px' }}>{p.title}</td>
+                                <td style={{ padding: '6px 4px' }}>{p.qty}</td>
+                                <td style={{ padding: '6px 4px', fontWeight: 600 }}>₪{p.revenue.toFixed(2)}</td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      )}
+                    </div>
+
+                    {/* Breakdown: payment + status */}
+                    <div style={{ background: 'var(--surface-color)', border: '1px solid var(--glass-border)', borderRadius: '16px', padding: '1.25rem 1.5rem' }}>
+                      <h3 style={{ marginTop: 0, fontSize: '1rem' }}><i className="fa-solid fa-credit-card" style={{ color: '#3498db', marginInlineEnd: '8px' }}></i>حسب وسيلة الدفع</h3>
+                      {Object.keys(r.byPayment).length === 0 ? <p style={{ color: 'var(--text-secondary)' }}>—</p> : Object.entries(r.byPayment).map(([k, v]) => (
+                        <div key={k} style={{ display: 'flex', justifyContent: 'space-between', padding: '5px 0', borderBottom: '1px solid var(--glass-border)', fontSize: '0.88rem' }}>
+                          <span>{PM_LABEL[k] || k}</span><strong>₪{v.toFixed(2)}</strong>
+                        </div>
+                      ))}
+                      <h3 style={{ fontSize: '1rem', marginBottom: '0.5rem' }}><i className="fa-solid fa-list-check" style={{ color: '#059669', marginInlineEnd: '8px' }}></i>حسب الحالة</h3>
+                      {Object.entries(r.byStatus).map(([k, v]) => (
+                        <div key={k} style={{ display: 'flex', justifyContent: 'space-between', padding: '5px 0', borderBottom: '1px solid var(--glass-border)', fontSize: '0.88rem' }}>
+                          <span style={{ color: 'var(--text-secondary)' }}>{k}</span><strong>{v}</strong>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                </div>
+              );
+            })()}
+
             {activeTab === 'dashboard' && role === 'operator' && (
               <div style={{ display: 'flex', flexDirection: 'column', gap: '2.5rem' }}>
                 {/* Advanced Top metrics Grid */}
@@ -1632,23 +1957,51 @@ export default function AdminDashboard() {
                               <div style={{ fontSize: '0.8rem', fontWeight: 700, color: 'var(--text-secondary)', marginBottom: '8px', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
                                 الأقسام الفرعية (Sub-sections)
                               </div>
-                              <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px', marginBottom: '10px' }}>
-                                {subsections.map(sub => (
-                                  <div key={sub.id} style={{ display: 'flex', alignItems: 'center', gap: '6px', padding: '4px 12px', borderRadius: '99px', background: 'var(--bg-color)', border: '1px solid var(--border-color)', fontSize: '0.85rem' }}>
-                                    <span>{sub.name_ar} / {sub.name_en}</span>
-                                    <button
-                                      onClick={async () => {
-                                        const updated = subsections.filter(s => s.id !== sub.id);
-                                        await updateSectionSubsections(sec.id, updated);
-                                        setSections(prev => prev.map(s => s.id === sec.id ? {...s, subsections: updated} : s));
-                                        showToast('تم الحذف', 'success');
-                                      }}
-                                      style={{ background: 'none', border: 'none', color: '#e74c3c', cursor: 'pointer', padding: 0, fontSize: '0.75rem', lineHeight: 1 }}
-                                    >
-                                      <i className="fa-solid fa-xmark"></i>
-                                    </button>
-                                  </div>
-                                ))}
+                              <div style={{ display: 'flex', flexDirection: 'column', gap: '10px', marginBottom: '10px' }}>
+                                {subsections.map(sub => {
+                                  const subs = sub.subs || [];
+                                  const saveSubs = async (newSubs) => {
+                                    const updated = subsections.map(s => s.id === sub.id ? { ...s, subs: newSubs } : s);
+                                    await updateSectionSubsections(sec.id, updated);
+                                    setSections(prev => prev.map(s => s.id === sec.id ? { ...s, subsections: updated } : s));
+                                  };
+                                  const mini = { padding: '4px 9px', borderRadius: '6px', border: '1px solid var(--border-color)', background: 'var(--surface-color)', color: 'var(--text-primary)', fontSize: '0.8rem', width: '110px' };
+                                  return (
+                                    <div key={sub.id} style={{ border: '1px solid var(--border-color)', borderRadius: '10px', padding: '0.7rem 0.9rem', background: 'var(--bg-color)' }}>
+                                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                                        <strong style={{ fontSize: '0.9rem' }}>{sub.name_ar} / {sub.name_en}</strong>
+                                        <button onClick={async () => {
+                                          const updated = subsections.filter(s => s.id !== sub.id);
+                                          await updateSectionSubsections(sec.id, updated);
+                                          setSections(prev => prev.map(s => s.id === sec.id ? { ...s, subsections: updated } : s));
+                                          showToast('تم الحذف', 'success');
+                                        }} style={{ background: 'none', border: 'none', color: '#e74c3c', cursor: 'pointer' }}><i className="fa-solid fa-trash"></i></button>
+                                      </div>
+                                      {/* Deeper categories (sub-subsections) */}
+                                      <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px', margin: '8px 0' }}>
+                                        {subs.length === 0 && <span style={{ fontSize: '0.76rem', color: 'var(--text-secondary)' }}>لا توجد فئات أعمق بعد</span>}
+                                        {subs.map(ss => (
+                                          <span key={ss.id} style={{ display: 'flex', alignItems: 'center', gap: '5px', padding: '3px 10px', borderRadius: '99px', background: 'var(--surface-color)', border: '1px solid var(--border-color)', fontSize: '0.8rem' }}>
+                                            {ss.name_ar}{ss.name_en ? ` / ${ss.name_en}` : ''}
+                                            <button onClick={() => saveSubs(subs.filter(x => x.id !== ss.id))} style={{ background: 'none', border: 'none', color: '#e74c3c', cursor: 'pointer', padding: 0, fontSize: '0.7rem', lineHeight: 1 }}><i className="fa-solid fa-xmark"></i></button>
+                                          </span>
+                                        ))}
+                                      </div>
+                                      <form onSubmit={(e) => {
+                                        e.preventDefault();
+                                        const fd = new FormData(e.target);
+                                        const ns = { id: Date.now().toString(), name_ar: fd.get('a') || '', name_en: fd.get('e') || '', name_he: fd.get('h') || '' };
+                                        if (!ns.name_ar && !ns.name_en) return;
+                                        saveSubs([...subs, ns]); e.target.reset(); showToast('تمت إضافة الفئة الأعمق', 'success');
+                                      }} style={{ display: 'flex', gap: '5px', flexWrap: 'wrap', alignItems: 'center' }}>
+                                        <input name="a" placeholder="فئة أعمق (عربي)" required style={mini} />
+                                        <input name="e" placeholder="Name (EN)" style={mini} />
+                                        <input name="h" placeholder="עברית" style={mini} />
+                                        <button type="submit" style={{ padding: '4px 12px', borderRadius: '6px', border: '1px solid var(--border-color)', background: 'transparent', color: 'var(--text-primary)', cursor: 'pointer', fontSize: '0.8rem' }}><i className="fa-solid fa-plus"></i></button>
+                                      </form>
+                                    </div>
+                                  );
+                                })}
                               </div>
                               {/* Add sub-section inline form */}
                               <form onSubmit={async (e) => {
@@ -1839,72 +2192,86 @@ export default function AdminDashboard() {
                   </div>
                 </div>
 
-                <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '1.5rem', gap: '1rem', flexWrap: 'wrap', alignItems: 'center' }}>
-                  <input type="text" placeholder="🔍 ابحث برمز SKU أو اسم المنتج..." value={inventorySearch} onChange={(e) => setInventorySearch(e.target.value)} style={{ flex: '1', minWidth: '250px', padding: '0.8rem 1.2rem', border: '1px solid var(--glass-border)', borderRadius: '8px', background: 'var(--bg-color)', color: 'var(--text-primary)' }} />
-                  <button onClick={reindexAll} style={{ padding: '0.7rem 1.2rem', borderRadius: '8px', border: '1px solid var(--accent-color)', background: 'transparent', color: 'var(--accent-color)', cursor: 'pointer', fontWeight: 600 }} title="إعادة بناء فهرس البحث (Algolia)">
-                    <i className="fa-solid fa-magnifying-glass"></i> إعادة فهرسة البحث
+                <div style={{ display: 'flex', marginBottom: '1.25rem', gap: '0.75rem', flexWrap: 'wrap', alignItems: 'center' }}>
+                  <input type="text" placeholder="🔍 ابحث: اسم، SKU، لون، مقاس..." value={inventorySearch} onChange={(e) => setInventorySearch(e.target.value)} style={{ flex: '1', minWidth: '220px', padding: '0.8rem 1.2rem', border: '1px solid var(--glass-border)', borderRadius: '8px', background: 'var(--bg-color)', color: 'var(--text-primary)' }} />
+                  <select value={inventorySort} onChange={e => setInventorySort(e.target.value)} style={{ padding: '0.7rem', borderRadius: '8px', border: '1px solid var(--border-color)', background: 'var(--bg-color)', color: 'var(--text-primary)' }}>
+                    <option value="name">ترتيب: الاسم</option>
+                    <option value="stock_asc">المخزون: الأقل أولاً</option>
+                    <option value="stock_desc">المخزون: الأكثر أولاً</option>
+                  </select>
+                  {invColorOpts.length > 0 && (
+                    <select value={invColor} onChange={e => setInvColor(e.target.value)} style={{ padding: '0.7rem', borderRadius: '8px', border: '1px solid var(--border-color)', background: 'var(--bg-color)', color: 'var(--text-primary)' }}>
+                      <option value="">كل الألوان</option>
+                      {invColorOpts.map(c => <option key={c} value={c}>{c}</option>)}
+                    </select>
+                  )}
+                  {invSizeOpts.length > 0 && (
+                    <select value={invSize} onChange={e => setInvSize(e.target.value)} style={{ padding: '0.7rem', borderRadius: '8px', border: '1px solid var(--border-color)', background: 'var(--bg-color)', color: 'var(--text-primary)' }}>
+                      <option value="">كل المقاسات</option>
+                      {invSizeOpts.map(s => <option key={s} value={s}>{s}</option>)}
+                    </select>
+                  )}
+                  <select value={invStatus} onChange={e => setInvStatus(e.target.value)} style={{ padding: '0.7rem', borderRadius: '8px', border: '1px solid var(--border-color)', background: 'var(--bg-color)', color: 'var(--text-primary)' }}>
+                    <option value="">كل الحالات</option>
+                    <option value="in">متوفر</option>
+                    <option value="low">منخفض</option>
+                    <option value="out">نفذ</option>
+                  </select>
+                  <button onClick={reindexAll} style={{ padding: '0.7rem 1rem', borderRadius: '8px', border: '1px solid var(--accent-color)', background: 'transparent', color: 'var(--accent-color)', cursor: 'pointer', fontWeight: 600 }} title="إعادة بناء فهرس البحث (Algolia)">
+                    <i className="fa-solid fa-magnifying-glass"></i> فهرسة
                   </button>
-                  <span style={{ color: 'var(--text-secondary)', display: 'flex', alignItems: 'center', gap: '0.5rem' }}><i className="fa-solid fa-boxes-stacked"></i> إجمالي الأصناف: {allInventoryItems.length}</span>
                 </div>
 
-                {filteredInventory.length === 0 ? (
+                {inventoryGroups.length === 0 ? (
                   <EmptyState icon="fa-boxes-stacked" text="لا توجد منتجات مطابقة في المخزون." />
                 ) : (
-                  <div style={{ overflowX: 'auto' }}>
-                    <table style={{ width: '100%', borderCollapse: 'collapse', minWidth: '900px' }}>
-                      <thead>
-                        <tr style={{ borderBottom: '2px solid var(--glass-border)', textAlign: 'right', color: 'var(--text-secondary)', fontSize: '0.85rem' }}>
-                          <th style={{ padding: '1rem' }}>الصورة</th>
-                          <th style={{ padding: '1rem' }}>المنتج / المقاس</th>
-                          <th style={{ padding: '1rem' }}>SKU</th>
-                          <th style={{ padding: '1rem' }}>السعر</th>
-                          <th style={{ padding: '1rem' }}>المخزون</th>
-                          <th style={{ padding: '1rem' }}>الحالة</th>
-                          <th style={{ padding: '1rem' }}>إجراءات</th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {filteredInventory.map(product => {
-                          const primaryImg = (product.images && product.images.length > 0) ? product.images[0] : (product.image || '/assets/black_jilbab_1779926556174.png');
-                          const stockLevel = product.stock || 0;
-                          const reserved = product.reserved || 0;
-                          const available = (product.available != null) ? product.available : stockLevel;
-                          const threshold = product.threshold || 5;
-                          const stockColor = available <= 0 ? '#e74c3c' : available <= threshold ? '#f5a623' : '#28a745';
-                          const stockBg = available <= 0 ? 'rgba(231,76,60,0.1)' : available <= threshold ? 'rgba(255,193,7,0.1)' : 'rgba(40,167,69,0.1)';
-                          const stockLabel = available <= 0 ? 'نفذت' : available <= threshold ? 'منخفض' : 'متوفر';
-                          const baseProduct = products.find(p => p.id === product.baseId);
-                          return (
-                            <tr key={product.sku || product.baseId} style={{ borderBottom: '1px solid var(--glass-border)' }}>
-                              <td style={{ padding: '1rem' }}><img src={primaryImg} alt="" style={{ width: '50px', height: '50px', objectFit: 'cover', borderRadius: '8px' }} /></td>
-                              <td style={{ padding: '1rem' }}>
-                                <strong>{product.title}</strong><br/>
-                                <span style={{ fontSize: '0.8rem', padding: '2px 8px', borderRadius: '10px', background: 'rgba(108,92,231,0.1)', color: '#6c5ce7' }}>{product.size || 'عام'}</span>
-                                {product.color && <span style={{ fontSize: '0.8rem', padding: '2px 8px', borderRadius: '10px', background: 'rgba(0,0,0,0.06)', color: 'var(--text-primary)', marginInlineStart: '6px' }}>{product.color}</span>}
-                                {reserved > 0 && <span style={{ fontSize: '0.75rem', marginInlineStart: '6px', color: 'var(--text-secondary)' }}>محجوز: {reserved}</span>}
-                              </td>
-                              <td style={{ padding: '1rem', fontFamily: 'monospace', fontSize: '0.85rem' }}>{product.sku || 'N/A'}</td>
-                              <td style={{ padding: '1rem', fontWeight: '600' }}>₪{Number(product.price).toFixed(2)}</td>
-                              <td style={{ padding: '1rem' }}>
-                                <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                                  <button onClick={() => updateProductStock(product.baseId, product.sku, Math.max(0, stockLevel - 1))} style={{ width: '32px', height: '32px', borderRadius: '8px', border: '1px solid #ccc', background: 'var(--bg-color)', cursor: 'pointer', fontWeight: 'bold', fontSize: '1.1rem' }}>−</button>
-                                  <input type="number" min="0" value={stockLevel} onChange={(e) => updateProductStock(product.baseId, product.sku, Math.max(0, parseInt(e.target.value) || 0))} style={{ width: '60px', textAlign: 'center', padding: '0.4rem', borderRadius: '8px', border: `2px solid ${stockColor}`, fontWeight: 'bold', fontSize: '1rem', background: stockBg, color: stockColor }} />
-                                  <button onClick={() => updateProductStock(product.baseId, product.sku, stockLevel + 1)} style={{ width: '32px', height: '32px', borderRadius: '8px', border: '1px solid #ccc', background: 'var(--bg-color)', cursor: 'pointer', fontWeight: 'bold', fontSize: '1.1rem' }}>+</button>
-                                  <span style={{ fontSize: '0.75rem', color: 'var(--text-secondary)' }}>متاح: {available}</span>
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
+                    {inventoryGroups.map(group => {
+                      const baseProduct = products.find(p => p.id === group.baseId);
+                      const gColor = group.totalAvail <= 0 ? '#e74c3c' : group.totalAvail <= 5 ? '#f5a623' : '#28a745';
+                      const gBg = group.totalAvail <= 0 ? 'rgba(231,76,60,0.1)' : group.totalAvail <= 5 ? 'rgba(255,193,7,0.1)' : 'rgba(40,167,69,0.1)';
+                      return (
+                        <div key={group.baseId} style={{ border: '1px solid var(--glass-border)', borderRadius: '12px', overflow: 'hidden', background: 'var(--bg-color)' }}>
+                          {/* Product header */}
+                          <div style={{ display: 'flex', alignItems: 'center', gap: '12px', padding: '0.8rem 1rem', borderBottom: '1px solid var(--glass-border)' }}>
+                            <img src={group.image || '/assets/black_jilbab_1779926556174.png'} alt="" style={{ width: '46px', height: '58px', objectFit: 'cover', borderRadius: '8px', flexShrink: 0 }} />
+                            <div style={{ flex: 1, minWidth: 0 }}>
+                              <strong style={{ display: 'block' }}>{group.title}</strong>
+                              <span style={{ fontSize: '0.78rem', color: 'var(--text-secondary)' }}>{group.items.length} مقاس/لون · ₪{Number(group.price).toFixed(2)}</span>
+                            </div>
+                            <span style={{ padding: '4px 12px', borderRadius: '20px', fontSize: '0.8rem', fontWeight: 700, background: gBg, color: gColor }}>إجمالي متاح: {group.totalAvail}</span>
+                            <div style={{ display: 'flex', gap: '6px' }}>
+                              <button onClick={() => baseProduct && startEditProduct(baseProduct)} style={{ color: '#6c5ce7', background: 'rgba(108,92,231,0.1)', border: 'none', padding: '8px 12px', borderRadius: '8px', cursor: 'pointer', fontWeight: 600, fontSize: '0.8rem' }}><i className="fa-solid fa-pen"></i></button>
+                              <button onClick={() => deleteProduct(group.baseId)} style={{ color: '#e74c3c', background: 'rgba(231,76,60,0.1)', border: 'none', padding: '8px 12px', borderRadius: '8px', cursor: 'pointer', fontWeight: 600, fontSize: '0.8rem' }}><i className="fa-solid fa-trash"></i></button>
+                            </div>
+                          </div>
+                          {/* Variants nested under the product */}
+                          <div style={{ padding: '0.5rem 1rem 0.8rem' }}>
+                            {group.items.map(v => {
+                              const stockLevel = v.stock || 0;
+                              const available = (v.available != null) ? v.available : stockLevel;
+                              const threshold = v.threshold || 5;
+                              const sc = available <= 0 ? '#e74c3c' : available <= threshold ? '#f5a623' : '#28a745';
+                              const sb = available <= 0 ? 'rgba(231,76,60,0.1)' : available <= threshold ? 'rgba(255,193,7,0.1)' : 'rgba(40,167,69,0.1)';
+                              return (
+                                <div key={v.sku || v.baseId} style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', padding: '0.55rem 0', borderBottom: '1px solid var(--surface-color)', flexWrap: 'wrap' }}>
+                                  <span style={{ fontSize: '0.8rem', padding: '2px 9px', borderRadius: '10px', background: 'rgba(108,92,231,0.1)', color: '#6c5ce7' }}>{v.size || 'عام'}</span>
+                                  {v.color && <span style={{ fontSize: '0.8rem', padding: '2px 9px', borderRadius: '10px', background: 'rgba(0,0,0,0.06)' }}>{v.color}</span>}
+                                  <span style={{ fontFamily: 'monospace', fontSize: '0.8rem', color: 'var(--text-secondary)' }}>{v.sku || 'N/A'}</span>
+                                  {v.reserved > 0 && <span style={{ fontSize: '0.74rem', color: 'var(--text-secondary)' }}>محجوز: {v.reserved}</span>}
+                                  <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', marginInlineStart: 'auto' }}>
+                                    <button onClick={() => updateProductStock(v.baseId, v.sku, Math.max(0, stockLevel - 1))} style={{ width: '30px', height: '30px', borderRadius: '7px', border: '1px solid #ccc', background: 'var(--bg-color)', cursor: 'pointer', fontWeight: 'bold' }}>−</button>
+                                    <input type="number" min="0" value={stockLevel} onChange={(e) => updateProductStock(v.baseId, v.sku, Math.max(0, parseInt(e.target.value) || 0))} style={{ width: '56px', textAlign: 'center', padding: '0.35rem', borderRadius: '7px', border: `2px solid ${sc}`, fontWeight: 'bold', background: sb, color: sc }} />
+                                    <button onClick={() => updateProductStock(v.baseId, v.sku, stockLevel + 1)} style={{ width: '30px', height: '30px', borderRadius: '7px', border: '1px solid #ccc', background: 'var(--bg-color)', cursor: 'pointer', fontWeight: 'bold' }}>+</button>
+                                    <span style={{ fontSize: '0.72rem', color: 'var(--text-secondary)', minWidth: '54px' }}>متاح: {available}</span>
+                                  </div>
                                 </div>
-                              </td>
-                              <td style={{ padding: '1rem' }}>
-                                <span style={{ padding: '4px 12px', borderRadius: '20px', fontSize: '0.8rem', fontWeight: '700', background: stockBg, color: stockColor }}>{stockLabel}</span>
-                              </td>
-                              <td style={{ padding: '1rem', display: 'flex', gap: '6px' }}>
-                                <button onClick={() => baseProduct && startEditProduct(baseProduct)} style={{ color: '#6c5ce7', background: 'rgba(108,92,231,0.1)', border: 'none', padding: '8px 12px', borderRadius: '8px', cursor: 'pointer', fontWeight: '600', fontSize: '0.8rem' }}><i className="fa-solid fa-pen"></i> تعديل</button>
-                                <button onClick={() => deleteProduct(product.baseId)} style={{ color: '#e74c3c', background: 'rgba(231,76,60,0.1)', border: 'none', padding: '8px 12px', borderRadius: '8px', cursor: 'pointer', fontWeight: '600', fontSize: '0.8rem' }}><i className="fa-solid fa-trash"></i> حذف</button>
-                              </td>
-                            </tr>
-                          );
-                        })}
-                      </tbody>
-                    </table>
+                              );
+                            })}
+                          </div>
+                        </div>
+                      );
+                    })}
                   </div>
                 )}
               </div>
@@ -1942,10 +2309,18 @@ export default function AdminDashboard() {
 
                     <div style={{ display: 'flex', gap: '1.5rem', flexWrap: 'wrap' }}>
                       <div style={{ flex: '1 1 100%' }}>
-                        <label className="admin-label">اسم الموديل</label>
+                        <label className="admin-label">اسم الموديل (عربي)</label>
                         <input type="text" value={newProduct.title} onChange={e => setNewProduct({...newProduct, title: e.target.value})} className="admin-input" required />
                       </div>
-                      
+                      <div style={{ flex: '1 1 45%', minWidth: '220px' }}>
+                        <label className="admin-label">Name (English) — اختياري</label>
+                        <input type="text" dir="ltr" value={newProduct.title_en} onChange={e => setNewProduct({...newProduct, title_en: e.target.value})} className="admin-input" placeholder="e.g. Classic Jilbab" />
+                      </div>
+                      <div style={{ flex: '1 1 45%', minWidth: '220px' }}>
+                        <label className="admin-label">שם (עברית) — اختياري</label>
+                        <input type="text" dir="rtl" value={newProduct.title_he} onChange={e => setNewProduct({...newProduct, title_he: e.target.value})} className="admin-input" placeholder="לדוגמה: ג'ילבאב קלאסי" />
+                      </div>
+
                       <div style={{ flex: '1 1 200px' }}>
                         <label className="admin-label">السعر (₪)</label>
                         <input type="number" step="0.01" value={newProduct.price} onChange={e => setNewProduct({...newProduct, price: e.target.value})} className="admin-input" required />
@@ -1967,9 +2342,26 @@ export default function AdminDashboard() {
                         return (
                           <div style={{ flex: '1 1 200px' }}>
                             <label className="admin-label">القسم الفرعي (Sub-section)</label>
-                            <select value={newProduct.subsectionId || ''} onChange={e => setNewProduct({...newProduct, subsectionId: e.target.value})} className="admin-input">
+                            <select value={newProduct.subsectionId || ''} onChange={e => setNewProduct({...newProduct, subsectionId: e.target.value, subSubId: ''})} className="admin-input">
                               <option value="">-- بدون قسم فرعي --</option>
                               {subs.map(sub => <option key={sub.id} value={sub.id}>{sub.name_ar} / {sub.name_en}</option>)}
+                            </select>
+                          </div>
+                        );
+                      })()}
+
+                      {/* Deeper category selector — shows only when the chosen sub-section has deeper categories */}
+                      {(() => {
+                        const selectedSec = sections.find(s => s.id === newProduct.sectionId);
+                        const sub = (selectedSec?.subsections || []).find(s => s.id === newProduct.subsectionId);
+                        const deep = sub?.subs || [];
+                        if (deep.length === 0) return null;
+                        return (
+                          <div style={{ flex: '1 1 200px' }}>
+                            <label className="admin-label">الفئة الأعمق (Deeper category)</label>
+                            <select value={newProduct.subSubId || ''} onChange={e => setNewProduct({...newProduct, subSubId: e.target.value})} className="admin-input">
+                              <option value="">-- بدون --</option>
+                              {deep.map(ss => <option key={ss.id} value={ss.id}>{ss.name_ar}{ss.name_en ? ` / ${ss.name_en}` : ''}</option>)}
                             </select>
                           </div>
                         );
@@ -2029,10 +2421,20 @@ export default function AdminDashboard() {
                     )}
 
                     <div>
-                      <label className="admin-label">وصف المنتج</label>
+                      <label className="admin-label">وصف المنتج (عربي)</label>
                       <textarea value={newProduct.description} onChange={e => setNewProduct({...newProduct, description: e.target.value})} className="admin-input" style={{ minHeight: '120px' }} />
                     </div>
-                    
+                    <div style={{ display: 'flex', gap: '1.5rem', flexWrap: 'wrap' }}>
+                      <div style={{ flex: '1 1 45%', minWidth: '220px' }}>
+                        <label className="admin-label">Description (English) — اختياري</label>
+                        <textarea dir="ltr" value={newProduct.description_en} onChange={e => setNewProduct({...newProduct, description_en: e.target.value})} className="admin-input" style={{ minHeight: '90px' }} />
+                      </div>
+                      <div style={{ flex: '1 1 45%', minWidth: '220px' }}>
+                        <label className="admin-label">תיאור (עברית) — اختياري</label>
+                        <textarea dir="rtl" value={newProduct.description_he} onChange={e => setNewProduct({...newProduct, description_he: e.target.value})} className="admin-input" style={{ minHeight: '90px' }} />
+                      </div>
+                    </div>
+
                     <button type="submit" className="btn-primary" style={{ marginTop: '1rem', padding: '1rem' }}>{editingProductId ? 'حفظ التعديلات' : 'إضافة للمخزون وإنشاء الباركود'}</button>
                   </form>
               </div>
@@ -2109,6 +2511,7 @@ export default function AdminDashboard() {
                                 <option value="قيد المعالجة (مدفوع)">قيد المعالجة (مدفوع)</option>
                                 <option value="قيد المعالجة (الدفع عند الاستلام)">قيد المعالجة (الدفع عند الاستلام)</option>
                                 <option value="قيد المعالجة">قيد المعالجة</option>
+                                <option value="تم التجهيز">تم التجهيز (جاهز للشحن)</option>
                                 <option value="جاري التوصيل">جاري التوصيل</option>
                                 <option value="تم التوصيل">تم التوصيل</option>
                                 <option value="ملغي">ملغي</option>
@@ -2139,6 +2542,49 @@ export default function AdminDashboard() {
                      <div style={{ flex: '1 1 100%' }}>
                        <label className="admin-label">اسم المتجر (Store Name)</label>
                        <input type="text" value={cmsSettings.storeName || ''} onChange={e => setCmsSettings({...cmsSettings, storeName: e.target.value})} className="admin-input" required />
+                     </div>
+
+                     {/* Delivery depot (route start) — used by the route optimiser on the map & courier app */}
+                     <div style={{ flex: '1 1 45%', minWidth: '220px' }}>
+                       <label className="admin-label">خط عرض المتجر (Store Latitude — نقطة انطلاق المسار)</label>
+                       <input type="number" step="any" value={cmsSettings.storeLat ?? ''} onChange={e => setCmsSettings({...cmsSettings, storeLat: e.target.value})} className="admin-input" placeholder="مثال: 32.0853" />
+                     </div>
+                     <div style={{ flex: '1 1 45%', minWidth: '220px' }}>
+                       <label className="admin-label">خط طول المتجر (Store Longitude)</label>
+                       <input type="number" step="any" value={cmsSettings.storeLng ?? ''} onChange={e => setCmsSettings({...cmsSettings, storeLng: e.target.value})} className="admin-input" placeholder="مثال: 34.7818" />
+                     </div>
+
+                     {/* Legal identity for tax invoices (فاتورة ضريبية / חשבונית מס) */}
+                     <div style={{ flex: '1 1 100%', borderTop: '1px solid var(--border-color)', paddingTop: '1.5rem' }}>
+                       <h4 style={{ color: 'var(--accent-color)', marginBottom: '0.5rem', fontSize: '1.1rem' }}>بيانات الفاتورة الضريبية (חשבונית מס — Tax Invoice)</h4>
+                       <p style={{ color: 'var(--text-secondary)', fontSize: '0.82rem', marginTop: 0, marginBottom: '1rem' }}>تظهر هذه البيانات على كل فاتورة تصدر للعملاء — مطلوبة قانونياً في إسرائيل.</p>
+                     </div>
+                     <div style={{ flex: '1 1 45%', minWidth: '220px' }}>
+                       <label className="admin-label">اسم العمل القانوني (שם העוסק / החברה)</label>
+                       <input type="text" value={cmsSettings.legalBusinessName || ''} onChange={e => setCmsSettings({...cmsSettings, legalBusinessName: e.target.value})} className="admin-input" placeholder="לדוגמה: ג'ילבאב סטור בע\&quot;מ" />
+                     </div>
+                     <div style={{ flex: '1 1 45%', minWidth: '220px' }}>
+                       <label className="admin-label">رقم العمل / ע.מ / ח.פ (מספר עוסק)</label>
+                       <input type="text" dir="ltr" value={cmsSettings.businessTaxId || ''} onChange={e => setCmsSettings({...cmsSettings, businessTaxId: e.target.value})} className="admin-input" placeholder="123456789" />
+                     </div>
+                     <div style={{ flex: '1 1 45%', minWidth: '220px' }}>
+                       <label className="admin-label">نوع العمل (סוג עוסק)</label>
+                       <select value={cmsSettings.businessType || 'osek_morsheh'} onChange={e => setCmsSettings({...cmsSettings, businessType: e.target.value})} className="admin-input">
+                         <option value="osek_morsheh">عوسيك مرشيه — עוסק מורשה (مع ضريبة القيمة المضافة)</option>
+                         <option value="osek_patur">عوسيك باتور — עוסק פטור (بدون ضريبة)</option>
+                       </select>
+                     </div>
+                     <div style={{ flex: '1 1 45%', minWidth: '220px' }}>
+                       <label className="admin-label">نسبة ضريبة القيمة المضافة % (מע"מ)</label>
+                       <input type="number" step="any" value={cmsSettings.vatRate ?? 18} onChange={e => setCmsSettings({...cmsSettings, vatRate: e.target.value})} className="admin-input" placeholder="18" />
+                     </div>
+                     <div style={{ flex: '1 1 100%' }}>
+                       <label className="admin-label">عنوان العمل (כתובת העסק)</label>
+                       <input type="text" value={cmsSettings.businessAddress || ''} onChange={e => setCmsSettings({...cmsSettings, businessAddress: e.target.value})} className="admin-input" placeholder="רחוב, עיר" />
+                     </div>
+                     <div style={{ flex: '1 1 45%', minWidth: '220px' }}>
+                       <label className="admin-label">بادئة رقم الفاتورة (اختياري)</label>
+                       <input type="text" dir="ltr" value={cmsSettings.invoicePrefix || ''} onChange={e => setCmsSettings({...cmsSettings, invoicePrefix: e.target.value})} className="admin-input" placeholder="مثال: 2026-" />
                      </div>
 
                      {/* Multilingual Hero Titles */}
@@ -2430,13 +2876,30 @@ export default function AdminDashboard() {
                               <input value={ad.linkUrl || ''} onChange={e => { const ads=[...(cmsSettings.ads||[])]; ads[idx]={...ad,linkUrl:e.target.value}; setCmsSettings({...cmsSettings,ads}); }} className="admin-input" placeholder="/#shop" />
                             </div>
                             <div style={{ gridColumn: '1 / -1' }}>
-                              <label className="admin-label">صورة الإعلان (Banner Image)</label>
-                              {ad.imageUrl && <img src={ad.imageUrl} alt="" style={{ width: '100%', height: '100px', objectFit: 'cover', borderRadius: '8px', marginBottom: '8px' }} />}
-                              <input type="file" accept="image/*" onChange={async (e) => {
-                                const file = e.target.files[0]; if (!file) return;
-                                const compressed = await compressImage(file);
-                                const ads=[...(cmsSettings.ads||[])]; ads[idx]={...ad,imageUrl:compressed}; setCmsSettings({...cmsSettings,ads});
-                              }} style={{ fontSize: '0.85rem' }} />
+                              <label className="admin-label">صورة الإعلان (Banner Image) — يُفضّل 1600×600</label>
+                              {ad.imageUrl && <img src={ad.imageUrl} alt="" style={{ width: '100%', height: '120px', objectFit: 'cover', borderRadius: '10px', marginBottom: '8px' }} />}
+                              <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                                <input type="file" accept="image/*" disabled={adImgUploading === idx} onChange={async (e) => {
+                                  const file = e.target.files[0]; if (!file) return;
+                                  setAdImgUploading(idx);
+                                  try {
+                                    // Compress then upload to Storage — store only the URL (keeps the
+                                    // settings document tiny so saves never hit Firestore's 1MB limit).
+                                    const compressed = await compressImage(file, 1600, 1600, 0.85);
+                                    const url = await uploadDataUrl(compressed, 'ads');
+                                    const ads = [...(cmsSettings.ads || [])]; ads[idx] = { ...ad, imageUrl: url }; setCmsSettings({ ...cmsSettings, ads });
+                                    showToast('تم رفع صورة الإعلان', 'success');
+                                  } catch (err) { console.error(err); showToast('فشل رفع الصورة', 'error'); }
+                                  finally { setAdImgUploading(null); }
+                                }} style={{ fontSize: '0.85rem' }} />
+                                {adImgUploading === idx && <span style={{ fontSize: '0.85rem', color: 'var(--text-secondary)' }}><i className="fa-solid fa-circle-notch fa-spin"></i> جاري الرفع…</span>}
+                                {ad.imageUrl && <button type="button" onClick={() => { const ads = [...(cmsSettings.ads || [])]; ads[idx] = { ...ad, imageUrl: '' }; setCmsSettings({ ...cmsSettings, ads }); }} style={{ background: 'none', border: 'none', color: '#e74c3c', cursor: 'pointer', fontSize: '0.85rem' }}>إزالة الصورة</button>}
+                              </div>
+                            </div>
+                            {/* Reorder */}
+                            <div style={{ gridColumn: '1 / -1', display: 'flex', gap: '8px' }}>
+                              <button type="button" disabled={idx === 0} onClick={() => { const ads = [...(cmsSettings.ads || [])]; [ads[idx - 1], ads[idx]] = [ads[idx], ads[idx - 1]]; setCmsSettings({ ...cmsSettings, ads }); }} style={{ padding: '4px 10px', borderRadius: '6px', border: '1px solid var(--border-color)', background: 'transparent', cursor: idx === 0 ? 'not-allowed' : 'pointer', opacity: idx === 0 ? 0.4 : 1, fontSize: '0.8rem' }}><i className="fa-solid fa-arrow-up"></i> أعلى</button>
+                              <button type="button" disabled={idx === (cmsSettings.ads || []).length - 1} onClick={() => { const ads = [...(cmsSettings.ads || [])]; [ads[idx + 1], ads[idx]] = [ads[idx], ads[idx + 1]]; setCmsSettings({ ...cmsSettings, ads }); }} style={{ padding: '4px 10px', borderRadius: '6px', border: '1px solid var(--border-color)', background: 'transparent', cursor: 'pointer', opacity: idx === (cmsSettings.ads || []).length - 1 ? 0.4 : 1, fontSize: '0.8rem' }}><i className="fa-solid fa-arrow-down"></i> أسفل</button>
                             </div>
                           </div>
                         </div>
@@ -2475,6 +2938,7 @@ export default function AdminDashboard() {
                     <input type="number" placeholder="القيمة" value={newPromo.discountValue || ''} onChange={(e) => setNewPromo({...newPromo, discountValue: Number(e.target.value)})} style={{ padding: '0.8rem', borderRadius: '8px', border: '1px solid var(--border-color)', width: '120px' }} />
                     <input type="number" placeholder="حد الاستخدام الكلي" title="إجمالي مرات الاستخدام (فارغ = بلا حد)" value={newPromo.usageLimit} onChange={(e) => setNewPromo({...newPromo, usageLimit: e.target.value})} style={{ padding: '0.8rem', borderRadius: '8px', border: '1px solid var(--border-color)', width: '150px' }} />
                     <input type="number" placeholder="حد لكل عميل" title="أقصى استخدام لكل عميل (فارغ = بلا حد)" value={newPromo.perCustomerLimit} onChange={(e) => setNewPromo({...newPromo, perCustomerLimit: e.target.value})} style={{ padding: '0.8rem', borderRadius: '8px', border: '1px solid var(--border-color)', width: '130px' }} />
+                    <input type="number" placeholder="حد أدنى للطلب (₪)" title="الحد الأدنى لقيمة السلة لتطبيق الكود (فارغ = بلا حد)" value={newPromo.minSubtotal} onChange={(e) => setNewPromo({...newPromo, minSubtotal: e.target.value})} style={{ padding: '0.8rem', borderRadius: '8px', border: '1px solid var(--border-color)', width: '140px' }} />
                     <label style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '0.85rem', color: 'var(--text-secondary)' }}>
                       <input type="checkbox" checked={newPromo.firstOrderOnly} onChange={(e) => setNewPromo({...newPromo, firstOrderOnly: e.target.checked})} /> لأول طلب فقط
                     </label>
@@ -2488,12 +2952,13 @@ export default function AdminDashboard() {
                           usageLimit: newPromo.usageLimit ? Number(newPromo.usageLimit) : null,
                           perCustomerLimit: newPromo.perCustomerLimit ? Number(newPromo.perCustomerLimit) : null,
                           firstOrderOnly: !!newPromo.firstOrderOnly,
+                          minSubtotal: newPromo.minSubtotal ? Number(newPromo.minSubtotal) : 0,
                           usageCount: 0,
                           active: true
                         };
                         const id = await addPromoCode(payload);
                         setPromoCodes([...promoCodes, { ...payload, id }]);
-                        setNewPromo({ code: '', discountValue: 0, type: 'fixed', usageLimit: '', perCustomerLimit: '', firstOrderOnly: false });
+                        setNewPromo({ code: '', discountValue: 0, type: 'fixed', usageLimit: '', perCustomerLimit: '', firstOrderOnly: false, minSubtotal: '' });
                         showToast('تم إضافة الكود بنجاح', 'success');
                       } catch(e) {
                         showToast('خطأ في الإضافة', 'error');
@@ -2848,8 +3313,128 @@ export default function AdminDashboard() {
             )}
 
             {/* MAP TAB */}
+            {/* DELIVERY ISSUES TAB */}
+            {activeTab === 'issues' && role === 'operator' && (
+              <div style={{ background: 'var(--surface-color)', padding: '1.5rem', borderRadius: '16px', border: '1px solid var(--glass-border)' }}>
+                <h3 style={{ marginTop: 0 }}><i className="fa-solid fa-triangle-exclamation" style={{ color: '#e67e22' }}></i> بلاغات التوصيل من المندوبين</h3>
+                {orders.filter(o => o.hasDeliveryIssue).length === 0 ? (
+                  <p style={{ color: 'var(--text-secondary)' }}>لا توجد بلاغات توصيل حالياً ✓</p>
+                ) : (
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
+                    {orders.filter(o => o.hasDeliveryIssue).map(o => {
+                      const c = o.customerInfo || o.shipping || {};
+                      const issues = o.deliveryIssues || [];
+                      const last = issues[issues.length - 1] || {};
+                      const phone = c.phone || c.phone1 || '';
+                      return (
+                        <div key={o.id} style={{ border: '1px solid #f0c89a', background: '#fff8ef', borderRadius: '12px', padding: '1rem 1.25rem' }}>
+                          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '0.6rem' }}>
+                            <div>
+                              <strong>طلب #{o.id.slice(0, 8).toUpperCase()}</strong>
+                              <span style={{ marginInlineStart: '12px', color: 'var(--text-secondary)' }}>{c.fullName || ''} · {o.status}</span>
+                              <span style={{ marginInlineStart: '12px', fontWeight: 700, color: o.paymentMethod === 'cash' ? '#c0392b' : '#1e7e34' }}>
+                                {o.paymentMethod === 'cash' ? `نقداً ₪${(Number(o.total) || 0).toFixed(2)}` : 'مدفوع مسبقاً'}
+                              </span>
+                            </div>
+                            <div style={{ display: 'flex', gap: '0.5rem' }}>
+                              <button onClick={() => setSelectedOrder(o)} className="btn-details"><i className="fa-solid fa-eye"></i> الطلب</button>
+                              <button onClick={() => resolveDeliveryIssue(o.id)} style={{ padding: '0.45rem 1rem', borderRadius: '8px', border: 'none', background: '#27ae60', color: '#fff', cursor: 'pointer', fontWeight: 600 }}>تم الحل ✓</button>
+                            </div>
+                          </div>
+                          {/* All reported issues for this order */}
+                          <div style={{ marginTop: '0.7rem', display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
+                            {issues.map((it, i) => (
+                              <div key={i} style={{ fontSize: '0.9rem', color: 'var(--text-primary)', background: '#fff', borderRadius: '8px', padding: '0.5rem 0.7rem', border: '1px solid #f0e0cc' }}>
+                                <strong style={{ color: '#c0392b' }}>{it.reason}</strong>
+                                {it.note ? <span> — {it.note}</span> : null}
+                                <div style={{ fontSize: '0.78rem', color: 'var(--text-secondary)', marginTop: '2px' }}>
+                                  {it.by ? `بواسطة ${it.by}` : ''} {it.at ? `· ${new Date(it.at).toLocaleString('ar-EG')}` : ''}
+                                </div>
+                              </div>
+                            ))}
+                          </div>
+                          {phone && (
+                            <div style={{ marginTop: '0.6rem', display: 'flex', gap: '0.5rem' }}>
+                              <a href={`tel:${phone}`} style={{ fontSize: '0.85rem', color: '#1976d2', textDecoration: 'none' }}><i className="fa-solid fa-phone"></i> {phone}</a>
+                              <a href={`https://wa.me/${phone.replace(/[^\d]/g, '').replace(/^0/, '972')}`} target="_blank" rel="noreferrer" style={{ fontSize: '0.85rem', color: '#25D366', textDecoration: 'none', marginInlineStart: '12px' }}><i className="fa-brands fa-whatsapp"></i> واتساب</a>
+                            </div>
+                          )}
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
+              </div>
+            )}
+
             {activeTab === 'map' && role === 'operator' && (
-              <AdminMap orders={orders} />
+              <AdminMap
+                orders={orders}
+                storeName={cmsSettings.storeName || 'المتجر'}
+                origin={Number.isFinite(Number(cmsSettings.storeLat)) && Number(cmsSettings.storeLat) !== 0
+                  ? [Number(cmsSettings.storeLat), Number(cmsSettings.storeLng)]
+                  : [31.5, 34.75]}
+              />
+            )}
+
+            {/* RETURNS TAB */}
+            {activeTab === 'returns' && role === 'operator' && (
+              <div style={{ background: 'var(--surface-color)', padding: '1.5rem', borderRadius: '16px', border: '1px solid var(--glass-border)' }}>
+                <h3 style={{ marginTop: 0 }}><i className="fa-solid fa-rotate-left"></i> طلبات الإرجاع والاسترداد</h3>
+                {returnRequests.length === 0 ? (
+                  <p style={{ color: 'var(--text-secondary)' }}>لا توجد طلبات إرجاع حالياً.</p>
+                ) : (
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
+                    {returnRequests.map(r => {
+                      const STAT = { pending: { t: 'قيد المراجعة', c: '#d97706' }, approved: { t: 'تمت الموافقة', c: '#059669' }, rejected: { t: 'مرفوض', c: '#dc2626' }, done: { t: 'تم الاسترداد', c: '#6b7280' } };
+                      const s = STAT[r.status] || STAT.pending;
+                      return (
+                        <div key={r.id} style={{ border: '1px solid var(--glass-border)', borderRadius: '12px', padding: '1rem 1.25rem' }}>
+                          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '0.6rem' }}>
+                            <div>
+                              <strong>طلب #{(r.orderId || '').slice(0, 8).toUpperCase()}</strong>
+                              <span style={{ marginInlineStart: '12px', color: s.c, fontWeight: 700 }}>{s.t}</span>
+                              <div style={{ fontSize: '0.82rem', color: 'var(--text-secondary)', marginTop: '4px' }}>
+                                {r.createdAt ? new Date(r.createdAt).toLocaleString('ar-EG') : ''}
+                              </div>
+                            </div>
+                            {r.status === 'pending' && (
+                              <div style={{ display: 'flex', gap: '0.5rem' }}>
+                                <button onClick={() => decideReturn(r.id, 'approve', r.orderId)} style={{ padding: '0.45rem 1rem', borderRadius: '8px', border: 'none', background: '#059669', color: '#fff', cursor: 'pointer', fontWeight: 600 }}>
+                                  موافقة
+                                </button>
+                                <button onClick={() => decideReturn(r.id, 'reject', r.orderId)} style={{ padding: '0.45rem 1rem', borderRadius: '8px', border: '1px solid var(--glass-border)', background: 'none', color: 'var(--text-secondary)', cursor: 'pointer' }}>
+                                  رفض
+                                </button>
+                              </div>
+                            )}
+                            {r.status === 'approved' && (
+                              <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center', flexWrap: 'wrap' }}>
+                                <input type="number" min="0" step="0.01" placeholder="مبلغ الاسترداد (كامل تلقائياً)"
+                                  value={refundInputs[r.id] ?? ''}
+                                  onChange={e => setRefundInputs(prev => ({ ...prev, [r.id]: e.target.value }))}
+                                  dir="ltr" style={{ width: '160px', padding: '0.4rem 0.6rem', borderRadius: '8px', border: '1px solid var(--border-color)', background: 'var(--bg-color)', color: 'var(--text-primary)', fontSize: '0.85rem' }} />
+                                <button onClick={() => decideReturn(r.id, 'complete', r.orderId, refundInputs[r.id])} style={{ padding: '0.45rem 1rem', borderRadius: '8px', border: 'none', background: '#7c3aed', color: '#fff', cursor: 'pointer', fontWeight: 600 }}>
+                                  <i className="fa-solid fa-rotate-left" style={{ marginInlineEnd: '6px' }}></i>إتمام الاسترداد + إرجاع المخزون
+                                </button>
+                              </div>
+                            )}
+                            {r.status === 'done' && r.refundAmount != null && (
+                              <span style={{ color: '#059669', fontWeight: 700 }}>↩️ تم استرداد ₪{(Number(r.refundAmount) || 0).toFixed(2)}</span>
+                            )}
+                          </div>
+                          {r.reason && <div style={{ marginTop: '0.6rem', fontSize: '0.9rem', color: 'var(--text-primary)' }}><strong>السبب:</strong> {r.reason}</div>}
+                          {Array.isArray(r.items) && r.items.length > 0 && (
+                            <div style={{ marginTop: '0.5rem', fontSize: '0.85rem', color: 'var(--text-secondary)' }}>
+                              {r.items.map((it, i) => <span key={i}>{it.title}{it.selectedSize ? ` (${it.selectedSize})` : ''} ×{it.quantity}{i < r.items.length - 1 ? '، ' : ''}</span>)}
+                            </div>
+                          )}
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
+              </div>
             )}
 
             {/* COURIERS / STAFF TAB */}
@@ -2960,23 +3545,39 @@ export default function AdminDashboard() {
                   <h3 style={{ marginTop: 0 }}><i className="fa-solid fa-dolly" style={{ marginInlineEnd: '8px', color: 'var(--accent-color)' }}></i>إنشاء أمر توريد جديد</h3>
                   <p style={{ color: 'var(--text-secondary)', fontSize: '0.85rem', marginTop: 0 }}>سجّل بضاعة واردة من المورّد. عند الاستلام تُضاف الكميات إلى المخزون تلقائياً مع تسجيلها في سجل الحركة.</p>
                   <form onSubmit={submitPurchaseOrder} style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
-                    <input type="text" placeholder="اسم المورّد (اختياري)" value={poDraft.supplier} onChange={e => setPoDraft({ ...poDraft, supplier: e.target.value })}
-                      style={{ padding: '12px 15px', borderRadius: '8px', border: '1px solid var(--border-color)', background: 'var(--bg-color)', color: 'var(--text-primary)', maxWidth: '320px' }} />
+                    <div style={{ display: 'flex', gap: '0.75rem', flexWrap: 'wrap' }}>
+                      <input type="text" placeholder="اسم المورّد (اختياري)" value={poDraft.supplier} onChange={e => setPoDraft({ ...poDraft, supplier: e.target.value })}
+                        style={{ flex: '1 1 240px', padding: '12px 15px', borderRadius: '8px', border: '1px solid var(--border-color)', background: 'var(--bg-color)', color: 'var(--text-primary)' }} />
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: '3px' }}>
+                        <label style={{ fontSize: '0.72rem', color: 'var(--text-secondary)' }}>تاريخ الوصول المتوقع</label>
+                        <input type="date" value={poDraft.expectedDate} onChange={e => setPoDraft({ ...poDraft, expectedDate: e.target.value })}
+                          style={{ padding: '10px 12px', borderRadius: '8px', border: '1px solid var(--border-color)', background: 'var(--bg-color)', color: 'var(--text-primary)' }} />
+                      </div>
+                    </div>
+                    <input type="text" placeholder="ملاحظة على الطلب (اختياري)" value={poDraft.note} onChange={e => setPoDraft({ ...poDraft, note: e.target.value })}
+                      style={{ padding: '10px 14px', borderRadius: '8px', border: '1px solid var(--border-color)', background: 'var(--bg-color)', color: 'var(--text-primary)' }} />
                     {poDraft.lines.map((line, i) => (
                       <div key={i} style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap', alignItems: 'center' }}>
                         <select value={line.sku} onChange={e => {
                           const opt = allInventoryItems.find(it => it.sku === e.target.value);
                           updatePoLine(i, { sku: e.target.value, productId: opt ? opt.baseId : '' });
-                        }} style={{ flex: '1 1 320px', padding: '10px', borderRadius: '8px', border: '1px solid var(--border-color)', background: 'var(--bg-color)', color: 'var(--text-primary)' }}>
+                        }} style={{ flex: '1 1 280px', padding: '10px', borderRadius: '8px', border: '1px solid var(--border-color)', background: 'var(--bg-color)', color: 'var(--text-primary)' }}>
                           <option value="">-- اختر الصنف (SKU) --</option>
                           {allInventoryItems.filter(it => it.sku).map(it => (
-                            <option key={it.sku} value={it.sku}>{it.title} / {it.size} ({it.sku})</option>
+                            <option key={it.sku} value={it.sku}>{it.title} / {it.size}{it.color ? ` / ${it.color}` : ''} ({it.sku}) — متوفر: {it.available}</option>
                           ))}
                         </select>
-                        <input type="number" min="1" value={line.qty} onChange={e => updatePoLine(i, { qty: e.target.value })} style={{ width: '90px', padding: '10px', borderRadius: '8px', border: '1px solid var(--border-color)', background: 'var(--bg-color)', color: 'var(--text-primary)' }} />
+                        <input type="number" min="1" placeholder="الكمية" value={line.qty} onChange={e => updatePoLine(i, { qty: e.target.value })} style={{ width: '80px', padding: '10px', borderRadius: '8px', border: '1px solid var(--border-color)', background: 'var(--bg-color)', color: 'var(--text-primary)' }} />
+                        <input type="number" min="0" step="0.01" placeholder="التكلفة/قطعة" value={line.cost} onChange={e => updatePoLine(i, { cost: e.target.value })} style={{ width: '110px', padding: '10px', borderRadius: '8px', border: '1px solid var(--border-color)', background: 'var(--bg-color)', color: 'var(--text-primary)' }} />
                         <button type="button" onClick={() => removePoLine(i)} style={{ background: 'rgba(231,76,60,0.1)', border: 'none', color: '#e74c3c', borderRadius: '8px', padding: '0.5rem 0.8rem', cursor: 'pointer' }}><i className="fa-solid fa-xmark"></i></button>
                       </div>
                     ))}
+                    {poDraft.lines.length > 0 && (
+                      <div style={{ fontSize: '0.85rem', color: 'var(--text-secondary)' }}>
+                        الإجمالي: {poDraft.lines.reduce((s, l) => s + (Number(l.qty) || 0), 0)} قطعة
+                        {poDraft.lines.some(l => Number(l.cost) > 0) && ` • التكلفة: ₪${poDraft.lines.reduce((s, l) => s + (Number(l.qty) || 0) * (Number(l.cost) || 0), 0).toFixed(2)}`}
+                      </div>
+                    )}
                     <div style={{ display: 'flex', gap: '0.75rem' }}>
                       <button type="button" onClick={addPoLine} style={{ padding: '0.6rem 1rem', borderRadius: '8px', border: '1px dashed var(--border-color)', background: 'transparent', cursor: 'pointer', color: 'var(--text-primary)' }}><i className="fa-solid fa-plus"></i> إضافة صنف</button>
                       <button type="submit" className="btn-primary" style={{ padding: '0.6rem 1.5rem' }}>حفظ أمر التوريد</button>
@@ -2991,16 +3592,22 @@ export default function AdminDashboard() {
                     <EmptyState icon="fa-dolly" text="لا توجد أوامر توريد." />
                   ) : (
                     <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
-                      {purchaseOrders.map(po => (
-                        <div key={po.id} style={{ padding: '1rem', borderRadius: '10px', background: 'var(--bg-color)', border: '1px solid var(--border-color)' }}>
+                      {purchaseOrders.map(po => {
+                        const totalQty = (po.lines || []).reduce((s, l) => s + (Number(l.qty) || 0), 0);
+                        const totalCost = (po.lines || []).reduce((s, l) => s + (Number(l.qty) || 0) * (Number(l.cost) || 0), 0);
+                        return (
+                        <div key={po.id} style={{ padding: '1rem 1.25rem', borderRadius: '12px', background: 'var(--bg-color)', border: '1px solid var(--border-color)' }}>
                           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '0.5rem' }}>
                             <div>
                               <strong>{po.supplier || 'مورّد غير محدد'}</strong>
                               <span style={{ marginInlineStart: '10px', fontSize: '0.8rem', padding: '2px 10px', borderRadius: '20px', background: po.status === 'received' ? 'rgba(40,167,69,0.15)' : 'rgba(230,126,34,0.15)', color: po.status === 'received' ? '#28a745' : '#e67e22' }}>
-                                {po.status === 'received' ? 'تم الاستلام' : 'قيد الانتظار'}
+                                {po.status === 'received' ? '✅ تم الاستلام' : '⏳ قيد الانتظار'}
                               </span>
                               <div style={{ fontSize: '0.8rem', color: 'var(--text-secondary)', marginTop: '4px' }}>
-                                {(po.lines || []).reduce((s, l) => s + (Number(l.qty) || 0), 0)} قطعة • {(po.lines || []).length} صنف • {po.createdAt ? new Date(po.createdAt).toLocaleDateString('en-GB') : ''}
+                                {totalQty} قطعة • {(po.lines || []).length} صنف{totalCost > 0 ? ` • التكلفة ₪${totalCost.toFixed(2)}` : ''}
+                                {po.createdAt ? ` • أُنشئ ${new Date(po.createdAt).toLocaleDateString('en-GB')}` : ''}
+                                {po.expectedDate ? ` • متوقع ${new Date(po.expectedDate).toLocaleDateString('en-GB')}` : ''}
+                                {po.receivedAt ? ` • استُلم ${new Date(po.receivedAt).toLocaleDateString('en-GB')}` : ''}
                               </div>
                             </div>
                             <div style={{ display: 'flex', gap: '0.5rem' }}>
@@ -3010,8 +3617,30 @@ export default function AdminDashboard() {
                               <button onClick={async () => { if (confirm('حذف أمر التوريد؟')) { await deletePurchaseOrder(po.id); loadPurchaseOrders(); } }} style={{ padding: '0.5rem 0.8rem', background: 'rgba(231,76,60,0.1)', color: '#e74c3c', border: 'none', borderRadius: '8px', cursor: 'pointer' }}><i className="fa-solid fa-trash"></i></button>
                             </div>
                           </div>
+                          {po.note && <div style={{ fontSize: '0.82rem', color: 'var(--text-secondary)', marginTop: '6px', fontStyle: 'italic' }}>📝 {po.note}</div>}
+                          {/* Line-item details — what's in this order */}
+                          <div style={{ marginTop: '0.8rem', borderTop: '1px dashed var(--border-color)', paddingTop: '0.7rem', display: 'flex', flexDirection: 'column', gap: '0.4rem' }}>
+                            {(po.lines || []).map((l, i) => {
+                              const it = allInventoryItems.find(x => x.sku === l.sku);
+                              return (
+                                <div key={i} style={{ display: 'flex', alignItems: 'center', gap: '10px', fontSize: '0.85rem' }}>
+                                  <img src={(it?.images?.[0]) || it?.image || '/assets/black_jilbab_1779926556174.png'} alt="" style={{ width: '34px', height: '44px', objectFit: 'cover', borderRadius: '5px', flexShrink: 0 }} />
+                                  <div style={{ flex: 1, minWidth: 0 }}>
+                                    <div style={{ color: 'var(--text-primary)' }}>{it?.title || l.sku}</div>
+                                    <div style={{ color: 'var(--text-secondary)', fontSize: '0.78rem' }}>
+                                      {[it?.size && it.size !== 'عام' ? `مقاس ${it.size}` : null, it?.color || null].filter(Boolean).join(' · ')}
+                                      <span style={{ fontFamily: 'monospace', marginInlineStart: '8px' }}>{l.sku}</span>
+                                      {it ? <span style={{ marginInlineStart: '8px' }}>(المخزون الآن: {it.available})</span> : null}
+                                    </div>
+                                  </div>
+                                  <span style={{ fontWeight: 700, whiteSpace: 'nowrap' }}>×{l.qty}{Number(l.cost) > 0 ? <span style={{ fontWeight: 400, color: 'var(--text-secondary)', marginInlineStart: '6px' }}>@₪{Number(l.cost).toFixed(2)}</span> : null}</span>
+                                </div>
+                              );
+                            })}
+                          </div>
                         </div>
-                      ))}
+                        );
+                      })}
                     </div>
                   )}
                 </div>
@@ -3043,12 +3672,28 @@ export default function AdminDashboard() {
 
                 {activePageSlug && pageDraft && (
                   <div style={{ background: 'var(--surface-color)', padding: '1.5rem', borderRadius: '16px', border: '1px solid var(--glass-border)', display: 'flex', flexDirection: 'column', gap: '1rem' }}>
-                    <div>
-                      <label className="admin-label">عنوان الصفحة</label>
-                      <input type="text" value={pageDraft.title} onChange={e => setPageTitle(e.target.value)} className="admin-input" />
+                    {/* Language switcher — edit the Arabic base or the Hebrew variant */}
+                    <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center' }}>
+                      <span style={{ fontSize: '0.85rem', color: 'var(--text-secondary)' }}>لغة المحتوى:</span>
+                      {[{ k: 'ar', l: 'العربية' }, { k: 'he', l: 'עברית' }].map(({ k, l }) => (
+                        <button key={k} type="button" onClick={() => setPageLang(k)}
+                          style={{ padding: '0.35rem 0.9rem', borderRadius: '8px', cursor: 'pointer', fontWeight: 700, fontSize: '0.85rem',
+                            border: pageLang === k ? '2px solid var(--accent-color)' : '1px solid var(--border-color)',
+                            background: pageLang === k ? 'rgba(108,92,231,0.08)' : 'transparent', color: 'var(--text-primary)' }}>
+                          {l}
+                        </button>
+                      ))}
+                      <span style={{ fontSize: '0.78rem', color: 'var(--text-secondary)', marginInlineStart: 'auto' }}>
+                        {pageLang === 'he' ? 'تظهر للزوار عند اختيار اللغة العبرية' : 'المحتوى الأساسي (افتراضي لباقي اللغات)'}
+                      </span>
                     </div>
 
-                    {(pageDraft.blocks || []).map((b, i) => (
+                    <div>
+                      <label className="admin-label">عنوان الصفحة</label>
+                      <input type="text" dir={pageLang === 'he' ? 'rtl' : 'rtl'} value={pageSlice(pageDraft, pageLang).title} onChange={e => setPageTitle(e.target.value)} className="admin-input" />
+                    </div>
+
+                    {(pageSlice(pageDraft, pageLang).blocks || []).map((b, i) => (
                       <div key={i} style={{ border: '1px solid var(--border-color)', borderRadius: '10px', padding: '1rem', background: 'var(--bg-color)' }}>
                         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.5rem' }}>
                           <span style={{ fontSize: '0.8rem', color: 'var(--text-secondary)' }}>قسم {i + 1}</span>
@@ -3161,7 +3806,22 @@ export default function AdminDashboard() {
                       حفظ التتبع
                     </button>
                   </div>
-                  <button 
+                  <div style={{ display: 'flex', gap: '10px', flexWrap: 'wrap' }}>
+                    <a
+                      href={`/invoice/${selectedOrder.id}`} target="_blank" rel="noopener noreferrer"
+                      style={{ flex: '1 1 200px', padding: '0.9rem', background: '#111', color: '#fff', borderRadius: '8px', cursor: 'pointer', fontWeight: 'bold', display: 'flex', justifyContent: 'center', alignItems: 'center', gap: '8px', textDecoration: 'none' }}
+                    >
+                      <i className="fa-solid fa-file-invoice"></i> فاتورة ضريبية (Original)
+                      {selectedOrder.invoiceNumber ? <span style={{ opacity: 0.7, fontWeight: 'normal' }}>#{String(selectedOrder.invoiceNumber).padStart(5, '0')}</span> : null}
+                    </a>
+                    <button
+                      onClick={() => printPackingSlip(selectedOrder)}
+                      style={{ flex: '1 1 160px', padding: '0.9rem', background: 'transparent', color: 'var(--text-primary)', border: '1.5px solid var(--border-color)', borderRadius: '8px', cursor: 'pointer', fontWeight: 'bold', display: 'flex', justifyContent: 'center', alignItems: 'center', gap: '8px' }}
+                    >
+                      <i className="fa-solid fa-box-open"></i> قائمة التجهيز
+                    </button>
+                  </div>
+                  <button
                     onClick={() => handleDeleteOrder(selectedOrder.id)}
                     style={{ padding: '1rem', background: '#e74c3c', color: '#fff', border: 'none', borderRadius: '8px', cursor: 'pointer', fontWeight: 'bold', display: 'flex', justifyContent: 'center', alignItems: 'center', gap: '8px', marginTop: '1rem' }}
                   >
@@ -3228,6 +3888,7 @@ export default function AdminDashboard() {
                             style={{ padding: '0.4rem 0.8rem', borderRadius: '6px', border: '1px solid var(--glass-border)', fontSize: '0.8rem', fontWeight: 'bold', background: 'var(--bg-color)', color: 'var(--text-primary)' }}
                           >
                             <option value="قيد المعالجة (مدفوع)">قيد المعالجة (مدفوع)</option>
+                            <option value="تم التجهيز">تم التجهيز (جاهز للشحن)</option>
                             <option value="جاري التوصيل">جاري التوصيل</option>
                             <option value="تم التوصيل">تم التوصيل</option>
                             <option value="ملغي">ملغي</option>

@@ -5,6 +5,8 @@ import { rateLimit, clientIp } from '@/lib/rateLimit';
 import { sendEmail, orderConfirmationHtml, lowStockAlertHtml, newOrderAdminHtml } from '@/lib/email';
 import { sendSms } from '@/lib/sms';
 import { resolveSmsTemplates, fillTemplate } from '@/lib/smsTemplates';
+import { serverGeocode } from '@/lib/geocodeServer';
+import { issueInvoice } from '@/lib/invoiceServer';
 
 // Authoritative order creation. The client may send item ids/sizes/quantities,
 // but ALL money (prices, discount, shipping, total) is recomputed here from
@@ -85,7 +87,8 @@ export async function POST(req) {
         ref: doc.ref,
         code: p.code,
         value: Number(p.discountValue ?? p.value ?? 0),
-        type: (p.type === 'percentage' ? 'percent' : p.type) || 'fixed'
+        type: (p.type === 'percentage' ? 'percent' : p.type) || 'fixed',
+        minSubtotal: Number(p.minSubtotal) || 0
       };
     }
 
@@ -142,6 +145,11 @@ export async function POST(req) {
           image: data.images?.[0] || item.image || null
         });
       }
+      // Promo minimum-order gate — enforced INSIDE the transaction so that a
+      // failed gate aborts (rolls back) and never leaves stock reserved.
+      if (promo && promo.minSubtotal > 0 && round2(subtotal) < promo.minSubtotal) {
+        throw new Error(`الحد الأدنى للطلب لاستخدام كود الخصم هو ₪${promo.minSubtotal}`);
+      }
       return { subtotal: round2(subtotal), hits };
     });
 
@@ -192,8 +200,29 @@ export async function POST(req) {
 
     const orderRef = await adminDb.collection('orders').add(orderDoc);
 
+    // Geocode the delivery address once, server-side, and store the coordinates
+    // on the order so the admin delivery map shows a precise pin instantly
+    // (no client-side geocoding, no jitter). Cached + best-effort.
+    try {
+      const geo = await serverGeocode({
+        city: safeCustomerInfo.city,
+        address: safeCustomerInfo.address,
+        neighborhood: safeCustomerInfo.neighborhood,
+        street: safeCustomerInfo.street
+      });
+      if (geo) await orderRef.update({ geo }).catch(() => {});
+    } catch { /* map pin is non-critical */ }
+
     // Increment promo usage (atomic).
     if (promo) promo.ref.update({ usageCount: FieldValue.increment(1) }).catch(() => {});
+
+    // Card + PayPal orders → issue the tax invoice at purchase: email the
+    // customer their copy and the owner the original, and it shows in the
+    // customer's account. (Cash/COD invoices are issued on delivery; see
+    // /api/orders/transition.)
+    if (paymentMethod === 'card' || paymentMethod === 'paypal') {
+      issueInvoice(orderRef.id, { emailCopy: true, emailOwner: true }).catch(() => {});
+    }
 
     // Audit movements (best-effort).
     for (const it of orderItems) {
